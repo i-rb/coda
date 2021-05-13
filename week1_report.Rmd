@@ -155,7 +155,7 @@ An example with the previously defined "m2" FOR $k=100$:
 C(m2,100)
 ```
 
-```{r}
+```{}
          [,1]     [,2]     [,3]
 [1,] 25.00000 30.00000 45.00000
 [2,] 15.62495 56.25004 28.12502
@@ -195,7 +195,8 @@ And here, one example with out 4 row "m2" matrix:
 
 ![Figure 1: Ternary plot 1](https://raw.githubusercontent.com/i-rb/coda/main/img/ternary1.png)
 ```{r,fig.width=5, fig.height=5}
-png(file="ternary1.png")
+wd=getwd()
+png(filename=paste0(wd, "/img/ternary1.png"))
 ternary(m2)
 dev.off()
 ```
@@ -206,7 +207,8 @@ I will test the 'compositions' ternary diagram:
 
 ```{r}
 ac=acomp(m2)
-png(file="ternary2.png")
+wd=getwd()
+png(filename=paste0(wd, "/img/ternary2.png"))
 plot(ac)
 dev.off()
 ```
@@ -707,7 +709,8 @@ We can visualise it. It should be the center of the other points. _In this terna
 ![Figure 3: Ternary plot 3](https://raw.githubusercontent.com/i-rb/coda/main/img/ternary3.png)
 
 ```{r,fig.width=2, fig.height=2}
-png(filename="ternary3.png")
+wd=getwd()
+png(filename=paste0(wd, "/img/ternary3.png"))
 ternary(rbind(m1,c_mean(m1)))
 dev.off()
 ```
@@ -885,7 +888,8 @@ center(m1)
 ![Figure 4: Ternary plot 4](https://raw.githubusercontent.com/i-rb/coda/main/img/ternary4.png)
 
 ```{r,fig.height=2,fig.width=2}
-png(filename="ternary4.png")
+wd=getwd()
+png(filename=paste0(wd, "/img/ternary4.png"))
 ternary(center(m1))
 dev.off()
 ```
@@ -899,12 +903,14 @@ However, there is no info about the ellipses construction.May it be the inverse 
 ```{r}
 mm1 = mean(acomp(m1))
 #plot(mm1,add=TRUE)
-png(filename="ternary5.png")
+wd=getwd()
+png(filename=paste0(wd, "/img/ternary5.png"))
 plot(mm1)
 ellipses(mean(acomp(m1)),variation(acomp(m1)),1)
 ellipses(mean(acomp(m1)),variation(acomp(m1)),2)
 ellipses(mean(acomp(m1)),variation(acomp(m1)),5)
 ellipses(mean(acomp(m1)),variation(acomp(m1)),10)
+ellipses(mean(acomp(m1)),variation(acomp(m1)),15)
 dev.off()
 
 ```
