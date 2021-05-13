@@ -71,19 +71,48 @@ Compositional Matrix:
 m1
 ```
 
+```{}
+         [,1] [,2] [,3]
+[1,] 0.250000 0.30 0.45
+[2,] 0.249999 0.30 0.45
+[3,] 0.200000 0.30 0.50
+[4,] 0.200000 0.35 0.45
+```
+
+
 Non Compositional Matrix: 
 ```{r}
 m2
 ```
+
+```{}
+         [,1] [,2] [,3]
+[1,] 0.250000 0.30 0.45
+[2,] 0.249999 0.90 0.45
+[3,] 0.200000 0.30 0.50
+[4,] 0.200000 0.35 0.65
+```
+
+
 
 Results if no deviation for the sum of the components is allowed:
 ```{r}
 which_coda(lex,0)
 ```
 
+```{}
+[1] 0 0 0
+```
+
+
+
 Results if a tiny (0.001) deviation for the sum of the components is allowed:
 ```{r}
 which_coda(lex,0.001)
+```
+
+```{}
+[1] 0 1 0
 ```
 
 
@@ -110,10 +139,30 @@ An example with the previously defined "m2" FOR $k=1$:
 C(m2)
 ```
 
+```{}
+          [,1]      [,2]      [,3]
+[1,] 0.2500000 0.3000000 0.4500000
+[2,] 0.1562495 0.5625004 0.2812502
+[3,] 0.2000000 0.3000000 0.5000000
+[4,] 0.1666667 0.2916667 0.5416667
+```
+
+
+
+
 An example with the previously defined "m2" FOR $k=100$:
 ```{r}
 C(m2,100)
 ```
+
+```{r}
+         [,1]     [,2]     [,3]
+[1,] 25.00000 30.00000 45.00000
+[2,] 15.62495 56.25004 28.12502
+[3,] 20.00000 30.00000 50.00000
+[4,] 16.66667 29.16667 54.16667
+```
+
 
 ### Function 3. Naive Ternary plot (from scratch).
 
@@ -144,16 +193,22 @@ ternary=function(mat){ # depends only in the data matrix containing the composit
 
 And here, one example with out 4 row "m2" matrix:
 
-```{r,fig.width=2, fig.height=2}
+![Figure 1: Ternary plot 1](https://raw.githubusercontent.com/i-rb/coda/main/img/ternary1.png)
+```{r,fig.width=5, fig.height=5}
+png(file="ternary1.png")
 ternary(m2)
+dev.off()
 ```
-
 
 I will test the 'compositions' ternary diagram:
 
+![Figure 1: Ternary plot 2](https://raw.githubusercontent.com/i-rb/coda/main/img/ternary2.png)
+
 ```{r}
 ac=acomp(m2)
+png(file="ternary2.png")
 plot(ac)
+dev.off()
 ```
 
 _Surprisingly, it doesn't make that much difference..._
@@ -179,10 +234,22 @@ x2 = t(matrix(c(3,  1,2,4)))
 pt(x1,x2)
 ```
 
+```{}
+           [,1]      [,2]      [,3]      [,4]
+[1,] 0.05325444 0.1183432 0.1183432 0.7100592
+```
+
+
 We can see that $x_1 \oplus x_2$ lies in the simplex.
 ```{r}
 sum(pt(x1,x2)) # arreglar PT
 ```
+
+```{}
+[1] 1
+```
+
+
 
 
 Here I replicate the example given in the "Transformations" document:
@@ -191,6 +258,10 @@ Here I replicate the example given in the "Transformations" document:
 pt(t(matrix(c(1,2,3))),t(matrix(c(1,2,1))))
 ```
 
+```{}
+      [,1] [,2]  [,3]
+[1,] 0.125  0.5 0.375
+```
 
 
 ### Function 5. The powering.
@@ -209,9 +280,22 @@ As an example, $2\odot x_1$, which should coincide with $x_1\oplus x_1$:
 pw(2,x1) # powering
 ```
 
+```{}
+            [,1]      [,2]       [,3]      [,4]
+[1,] 0.006387509 0.2838893 0.07097232 0.6387509
+```
+
+
 ```{r}
 pt(x1,x1) # perturbation
 ```
+
+```{}
+            [,1]      [,2]       [,3]      [,4]
+[1,] 0.006387509 0.2838893 0.07097232 0.6387509
+```
+
+
 
 ... and  the "transformations" document example:
 
@@ -219,6 +303,11 @@ pt(x1,x1) # perturbation
 pw(2,t(matrix(c(1,2,1)))) # perturbationx
 ```
 
+
+```{}
+          [,1]      [,2]      [,3]
+[1,] 0.1666667 0.6666667 0.1666667
+```
 
 
 ### Function 6. The Aitchison inner product.
@@ -242,6 +331,10 @@ Thus, $\langle x_1,x_2 \rangle=-0.26672$
 inner(x1,x2)
 ```
 
+```{}
+[1] -0.2667037
+```
+
 
 ### Function 7. The Aitchison distance.
 
@@ -262,18 +355,49 @@ As any distance, $d_A(x_1,x_1)$ should be equal to 0 and positive otherwise:
 
 ```{r}
 dist(x1,x1)
+```
+```{}
+[1] 0
+```
+
+
+
+```{r}
 dist(x1,x2)
 ```
+
+```{}
+[1] 2.1606
+```
+
 
 I cannot get the equality between norm(x-y) and distance(x,y), despite it is stated in the page (p.41) of the transformations document (maybe **only a feature of the 'compositions' package**? Yes! That is!). Empirically, I even get an error because $z:=x-y$ has positive and negative components and, therefore, $ln(z_i/z_j)$ should be calculated and $\exists\; i,j$ such that $z_i\cdot z_j<0$ 
 
 ```{r}
 dist(x1,x2)
-sqrt(inner(x1-x2,x1-x2))
+```
+```{}
+[1] 2.1606
+```
 
+
+```{r}
+sqrt(inner(x1-x2,x1-x2))
+```
+
+```{}
+NaNs producedNaNs producedNaNs producedNaNs produced[1] NaN
+```
+
+
+```{r}
 x1c = acomp(x1)   
 x2c = acomp(x2)
 norm(x1c-x2c) # composition package norm
+```
+
+```{}
+[1] 2.1606
 ```
 
 
@@ -302,6 +426,10 @@ Here the function is tested:
   lin(m3,v3)
 ```
 
+```{}
+          [,1]      [,2]      [,3]
+[1,] 0.4221787 0.1926071 0.3852142
+```
 
 
 ## 1.2.2 The Aitchison Geometry (Transformations)
@@ -325,10 +453,18 @@ For example, the transformation for $x_1$:
 alr(x1)
 ```
 
+```{}
+[1] -2.3025851 -0.4054651 -1.0986123
+```
+
 And it coincides with the result of the 'compositions' package:
 
 ```{r}
 compositions::alr(x1)[1,]
+```
+
+```{}
+[1] -2.3025851 -0.4054651 -1.0986123
 ```
 
 
@@ -353,6 +489,11 @@ Here, the alr transformation is used for a new vector $x_3$:
 ```{r}
 x3=c(0.4,0.2,0.4)
 ilr(x3)
+```
+```{}
+           [,1]
+[1,]  0.2829762
+[2,] -0.4901291
 ```
 
 
@@ -381,6 +522,15 @@ test1 <- t(matrix(c(4, 2, 0,1, 4, 1,1, 1, 4), 3, 3))
 expm(test1,100)
 ```
 
+```{}
+         [,1]     [,2]      [,3]
+[1,] 147.8666 183.7651  71.79703
+[2,] 127.7811 183.7651  91.88257
+[3,] 127.7811 163.6796 111.96811
+```
+
+
+
 Of course, this was not needed. I did not realise the dimensions.
 
 Now, the inverse ilr (only for the D=3 case): $x=\mathrm{ilr}^{-1}(\mathbf{x}^*) = \mathcal{C}(\exp(\mathbf{V}_D x^*)$ 
@@ -401,8 +551,17 @@ Testing the new function for $x_3$, we should have $\mathrm{ilr}^{-1}(\mathrm{il
 x3
 ```
 
+```{}
+[1] 0.4 0.2 0.4
+```
+
+
 ```{r}
 inverseilr(ilr(x3))
+```
+
+```{}
+[1] 0.4 0.2 0.4
 ```
 
 
@@ -433,6 +592,18 @@ V3
 V_D(3) # our brand new function
 ```
 
+```{}
+           [,1]       [,2]
+[1,]  0.8164966  0.0000000
+[2,] -0.4082483  0.7071068
+[3,] -0.4082483 -0.7071068
+           [,1]       [,2]
+[1,]  0.8164966  0.0000000
+[2,] -0.4082483  0.7071068
+[3,] -0.4082483 -0.7071068
+```
+
+
 Now, it is possible to update the ilr function:
 
 ```{r}
@@ -449,12 +620,24 @@ testvec = t(matrix(c(1,2,4)))
 ilr(testvec)
 ```
 
+```{}
+           [,1]       [,2]
+[1,] -0.8489285 -0.4901291
+```
+
 However... (I can assume the first and the second coordinates are interchangables, and also that (x,y), (-x, -y) are equivalent representations, but...). I have found that the 'compositions' package what does here is $\mathrm{ilr}(x) = V^T \mathrm{clr}(x)$.
 
 ```{r}
 ac = acomp(c(1,2,4))
 
 compositions::ilr(ac)
+```
+
+```{}
+          [,1]      [,2]
+[1,] 0.4901291 0.8489285
+attr(,"class")
+[1] "rmult"
 ```
 
 
@@ -465,6 +648,14 @@ The good news is that the ilr transformation defined previously works with (the 
 ```{r}
 ilr(t(m2))
 ```
+
+```{}
+           [,1]       [,2]       [,3]
+[1,]  0.1288331  0.1821927  0.0000000
+[2,] -0.3616415  0.8340814 -0.1090010
+[3,] -0.1365680 -0.1931363 -0.1855196
+```
+
 
 ## 1.4. Descriptive Analysis of Compositional Data
 
@@ -492,16 +683,33 @@ For example:
 c_mean(m1)
 ```
 
+```{}
+          [,1]      [,2]     [,3]
+[1,] 0.2241885 0.3125984 0.463213
+```
+
+
 And it coincides with the 'compositions' package mean:
 
 ```{r}
 mean(acomp(m1))
 ```
 
+```{}
+[1] 0.2241885 0.3125984 0.4632130
+attr(,"class")
+[1] acomp
+```
+
+
 We can visualise it. It should be the center of the other points. _In this ternary diagramm, the mean is represented by point that is surrounded by the other three. It does not look good._
 
+![Figure 3: Ternary plot 3](https://raw.githubusercontent.com/i-rb/coda/main/img/ternary3.png)
+
 ```{r,fig.width=2, fig.height=2}
+png(filename="ternary3.png")
 ternary(rbind(m1,c_mean(m1)))
+dev.off()
 ```
 
 
@@ -529,8 +737,17 @@ It coincides with the 'compositional' package result for $m_1$:
 tvar(m1)
 ```
 
+```{}
+[1] 0.02421196
+```
+
+
 ```{r}
 mvar(acomp(m1))
+```
+
+```{}
+[1] 0.02421196
 ```
 
 
@@ -552,6 +769,12 @@ E.g.:
 ```{r}
 csd(m1)
 ```
+
+```{}
+[1] 0.1100272
+```
+
+
 
 ### Function 15. Variation Matrix.
 
@@ -580,8 +803,24 @@ If we compute it for $m_1$, it should coincide with the 'compositions' package v
 varm(m1)
 ```
 
+```{}
+           [,1]       [,2]       [,3]
+[1,] 0.00000000 0.07084081 0.20275598
+[2,] 0.07084081 0.00000000 0.06297584
+[3,] 0.20275598 0.06297584 0.00000000
+```
+
+
+
 ```{r}
 compositions::variation(acomp(m1))
+```
+
+```{}
+           [,1]      [,2]      [,3]
+[1,] 0.00000000 0.03400380 0.02720936
+[2,] 0.03400380 0.00000000 0.01142272
+[3,] 0.02720936 0.01142272 0.00000000
 ```
 
 
@@ -606,6 +845,13 @@ varm2 = function(x){ # x is a NxD matrix
 varm2(m1) # this coincides
 ```
 
+```{}
+           [,1]       [,2]       [,3]
+[1,] 0.00000000 0.03400380 0.02720936
+[2,] 0.03400380 0.00000000 0.01142272
+[3,] 0.02720936 0.01142272 0.00000000
+```
+
 
 ### Function 16. Centering data.
 
@@ -628,22 +874,38 @@ It works! However, as the sample size is only N=4 with similar points, the resul
 center(m1)
 ```
 
+```{}
+          [,1]      [,2]      [,3]
+[1,] 0.3021005 0.3272931 0.3706064
+[2,] 0.3021003 0.3272932 0.3706065
+[3,] 0.2930169 0.3286681 0.3783150
+[4,] 0.2924825 0.3360329 0.3714846
+```
+
+![Figure 4: Ternary plot 4](https://raw.githubusercontent.com/i-rb/coda/main/img/ternary4.png)
+
 ```{r,fig.height=2,fig.width=2}
+png(filename="ternary4.png")
 ternary(center(m1))
+dev.off()
 ```
 
 Here is plotted some confidence regions of different level for the center. In the 'descriptive' document there is information about the right choice for the radius $r$ and the assumptios to be hold: normal data, N large... 
 
 However, there is no info about the ellipses construction.May it be the inverse of the mlr of a Sphere? _This could be checked later if needed_
 
+![Figure 5: Ternary plot 5](https://raw.githubusercontent.com/i-rb/coda/main/img/ternary5.png)
+
 ```{r}
 mm1 = mean(acomp(m1))
 #plot(mm1,add=TRUE)
+png(filename="ternary5.png")
 plot(mm1)
 ellipses(mean(acomp(m1)),variation(acomp(m1)),1)
 ellipses(mean(acomp(m1)),variation(acomp(m1)),2)
 ellipses(mean(acomp(m1)),variation(acomp(m1)),5)
 ellipses(mean(acomp(m1)),variation(acomp(m1)),10)
+dev.off()
 
 ```
 
@@ -675,9 +937,28 @@ We can observe that it works: although the second part of $m_1$ is not more impo
 
 ```{r}
 m1
+```
 
+```{}
+         [,1] [,2] [,3]
+[1,] 0.250000 0.30 0.45
+[2,] 0.249999 0.30 0.45
+[3,] 0.200000 0.30 0.50
+[4,] 0.200000 0.35 0.45
+```
+
+
+```{r}
 #balance
 balance(m1,c(2),c(1,3))
+```
+
+```{}
+            [,1]
+[1,] -0.09109797
+[2,] -0.09109634
+[3,] -0.04301325
+[4,]  0.12586350
 ```
 
 
