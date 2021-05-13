@@ -531,7 +531,7 @@ mvar(acomp(m1))
 ```
 
 
-# Function 14. The Standard Deviation.
+### Function 14. The Standard Deviation.
 
 The SD for compositional data can be defined through the total variance as:
 
@@ -550,7 +550,7 @@ E.g.:
 csd(m1)
 ```
 
-# Function 15. Variation Matrix.
+### Function 15. Variation Matrix.
 
 The Variation Matrix is defined empirically as a DxD matrix with components:
 
@@ -600,14 +600,81 @@ varm2 = function(x){ # x is a NxD matrix
 ```
 
 ```{r}
-varm2(m1)
+varm2(m1) # this coincides
 ```
 
-```{r}
-(1/3)*sum(log(m1[,1]/m1[,2])**2)
-```
+
+### Function 16. Centering data.
+
+The transformation from $\mathbf{x}$ to the transformed $\mathbf{z}$ is done through:
+
+$\mathbf{z} = \dfrac{1}{\sqrt{\mathrm{mvar}(X)}}\odot(\mathbf{x-\bar{\mathbf{x}}})$
 
 ```{r}
-log(c_mean(m1)[1,1]/c_mean(m1)[1,2])**2
+center = function (x){ # x is an NxD matrix
+  denominator = sqrt(tvar(x))
+  resta = -matrix(c_mean(x), nrow=dim(x)[1], ncol=dim(x)[2], byrow=TRUE)
+  res = pw(denominator,pt(x,resta))
+  return(res)
+}
 ```
+
+It works! However, as the sample size is only N=4 with similar points, the result looks strange. 
+
+```{r}
+center(m1)
+```
+
+```{r,fig.height=2,fig.width=2}
+ternary(center(m1))
+```
+
+Here is plotted some confidence regions of different level for the center. In the 'descriptive' document there is information about the right choice for the radius $r$ and the assumptios to be hold: normal data, N large... 
+
+However, there is no info about the ellipses construction.May it be the inverse of the mlr of a Sphere? _This could be checked later if needed_
+
+```{r}
+mm1 = mean(acomp(m1))
+#plot(mm1,add=TRUE)
+plot(mm1)
+ellipses(mean(acomp(m1)),variation(acomp(m1)),1)
+ellipses(mean(acomp(m1)),variation(acomp(m1)),2)
+ellipses(mean(acomp(m1)),variation(acomp(m1)),5)
+ellipses(mean(acomp(m1)),variation(acomp(m1)),10)
+
+```
+
+### Function 17. Balance between two groups.
+
+Given a comp. variable $\mathbf{x}$, for each observation, the balance between two groups is given by:
+
+$K \sum_{a\in A} N_b \ln x_a -K \sum_{b\in B} N_B \ln x_b\;\;\;$, where $\;\;\;K=\left(N_aN_b(N_a+N_b)\right)^{-1/2}$.
+
+```{r}
+balance = function(x,A,B){ # x matrix NxD (output Nx1), A, B vector of positions of each group
+  if (length(A)==1){gA = matrix(x[,A])}
+  if (length(A)>1){gA = (x[,A])}
+  if (length(B)==1){gB = matrix(x[,B])}
+  if (length(B)>1){gB = (x[,B])}
+    
+  Na = dim(gA)[2]
+  Nb = dim(gB)[2]
+  K = (Na*Nb*(Na+Nb))**(-0.5)
+  res = numeric()
+  for (t in (1:dim(x)[1])){
+    res[t] = K*sum(Nb*log(gA[t,])) - K*sum(Na*log(gB[t,])) 
+  }
+  return(matrix(res))
+}
+```
+
+We can observe that it works: although the second part of $m_1$ is not more important than the "mean" of the two others, for the forth observation it is.
+
+```{r}
+m1
+
+#balance
+balance(m1,c(2),c(1,3))
+```
+
 
