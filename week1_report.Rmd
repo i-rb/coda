@@ -465,11 +465,11 @@ ilr(t(m2))
 
 ## 1.4. Descriptive Analysis of Compositional Data
 
-### Function 12. The _compositional mean_.
+### Function 12. The compositional mean.
 
 The compositional mean of a variable $\mathbf{x}$ is given by:
 
-**EQUÍ EMPOBINAR L'ECUACION**
+$\bar{\mathbf{x}} = \dfrac{1}{N} \odot \bigoplus^N_{n=1}\mathbf{x}_n = \mathcal{C}\left(\exp\left(\dfrac{1}{N}\sum_{n=1}^N \ln(\mathbf{x}_n) \right)\right)$
 
 
 ```{r}
@@ -493,5 +493,121 @@ And it coincides with the 'compositions' package mean:
 
 ```{r}
 mean(acomp(m1))
+```
+
+We can visualise it. It should be the center of the other points. _In this ternary diagramm, the mean is represented by point that is surrounded by the other three. It does not look good._
+
+```{r,fig.width=2, fig.height=2}
+ternary(rbind(m1,c_mean(m1)))
+```
+
+
+### Function 13. The total variance.
+
+The total variance for a compositional variable $\mathbf{x}$ is defined as:
+
+$\mathrm{tvar}(\mathbf{x})=\dfrac{1}{N-1}\sum_{n=1}^N d_A^2(\mathbf{x}_n, \bar{\mathbf{x}})$
+
+```{r}
+tvar = function(x){ # x is a NxD matrix
+  m = c_mean(x)
+  suma=0
+  N = dim(x)[1]
+  for (i in 1:N){
+    suma = suma + (dist(t(matrix(x[i,])),m))**2
+  }
+  return(suma/(N-1))
+}
+```
+
+It coincides with the 'compositional' package result for $m_1$:
+
+```{r}
+tvar(m1)
+```
+
+```{r}
+mvar(acomp(m1))
+```
+
+
+# Function 14. The Standard Deviation.
+
+The SD for compositional data can be defined through the total variance as:
+
+$\mathrm{tsd}(\mathbf{x})=\sqrt{\dfrac{1}{D-1}\mathrm{tvar}(\mathbf{x})}$
+
+```{r}
+csd = function(x){ # x NxD matrix
+  D = dim(x)[2]
+  return(sqrt(tvar(x)/(D-1)))
+}
+```
+
+E.g.:
+
+```{r}
+csd(m1)
+```
+
+# Function 15. Variation Matrix.
+
+The Variation Matrix is defined empirically as a DxD matrix with components:
+
+$\hat{\tau}_{ij} = \dfrac{1}{N-1}\sum_{n=1}^N \ln^2 \dfrac{x_{ni}}{x_{nj}} - \ln^2 \dfrac{\bar{x_i}}{\bar{x_j}}$
+
+```{r}
+varm = function(x){ # x is a NxD matrix
+  N=dim(x)[1]
+  D=dim(x)[2]
+  m = c_mean(x)
+  res = matrix(0,D,D)
+  for (i in 1:D){
+    for (j in 1:D){
+      res[i,j]=(1/(N-1))*(sum((log(x[,i]/x[,j]))**2))-(log(m[1,i]/m[1,j]))**2
+    }
+  }
+  return(res)
+}
+```
+
+If we compute it for $m_1$, it should coincide with the 'compositions' package variation:
+
+```{r}
+varm(m1)
+```
+
+```{r}
+compositions::variation(acomp(m1))
+```
+
+
+But it does not! Why? Because 'compositions' uses the direct version: $\tau_{ij}=V(\ln(\frac{x_i}{x_j}))$.
+
+```{r}
+varm2 = function(x){ # x is a NxD matrix
+  N=dim(x)[1]
+  D=dim(x)[2]
+  m = c_mean(x)
+  res = matrix(0,D,D)
+  for (i in 1:D){
+    for (j in 1:D){
+      res[i,j]=var(log(x[,i]/x[,j]))
+    }
+  }
+  return(res)
+}
+```
+
+```{r}
+varm2(m1)
+```
+
+```{r}
+(1/3)*sum(log(m1[,1]/m1[,2])**2)
+```
+
+```{r}
+log(c_mean(m1)[1,1]/c_mean(m1)[1,2])**2
 ```
 
