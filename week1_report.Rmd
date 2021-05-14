@@ -10,6 +10,7 @@ output:
     toc: yes
 ---
 
+# Introduction to Compositional Data
 
 In this notebook I am computing the functions that are mentioned in the _Week 1 Report_. When possible, I compare my results with those obtained via the 'compositions' package.
 
@@ -546,7 +547,6 @@ inverseilr=function(x){ # x is x*, vec of coordinates
 ```
 
 
-
 Testing the new function for $x_3$, we should have $\mathrm{ilr}^{-1}(\mathrm{ilr(\mathbf{x})})=\mathbf{x}$. Perfect! _(there was a bug in previous versions, I forgot a "log" somewhere)_
 
 ```{r}
@@ -643,7 +643,52 @@ attr(,"class")
 ```
 
 
-## 1.3. Regressions
+Now we should also update the ilr inverse, that we will need for the regressions section:
+
+```{r}
+inverseilr=function(x){ # x is x*, matrix of coordinates
+  Vi = V_D(dim(x)[1]+1)
+  return(C(t(exp(Vi%*%x))))
+}
+```
+
+It works!! (There is an issue: ilr(m1) instead of the matrix of coordinates returns the transpose of the matrix of coordinates)
+
+```{r}
+inverseilr(t(ilr(m1)))
+```
+
+```{}
+          [,1]      [,2]      [,3]
+[1,] 0.2500000 0.3000000 0.4500000
+[2,] 0.2499992 0.3000003 0.4500005
+[3,] 0.2000000 0.3000000 0.5000000
+[4,] 0.2000000 0.3500000 0.4500000
+
+```
+
+
+
+```{r}
+m1
+```
+
+```{}
+         [,1] [,2] [,3]
+[1,] 0.250000 0.30 0.45
+[2,] 0.249999 0.30 0.45
+[3,] 0.200000 0.30 0.50
+[4,] 0.200000 0.35 0.45
+```
+
+
+
+
+<a name="link1">
+
+## 1.3. Regressions (to be complated below)
+
+</a>
 
 The good news is that the ilr transformation defined previously works with (the transpose of) matrices; the bad is that the regression cannot be done yet (remark that both the independent and dependent variables could be matrices). 
 
@@ -967,4 +1012,136 @@ balance(m1,c(2),c(1,3))
 [4,]  0.12586350
 ```
 
-...
+# Multivariate General Linear Model
+
+## 2.2 Estimation
+
+### Function 18. Estimation of the coefficients.
+
+Given the model: $\begin{pmatrix} y_1\\ y_2\\ ...\\ y_{p}\end{pmatrix} = D\begin{pmatrix}\beta_1\\\beta_2\\...\\ \beta_{p}\end{pmatrix} + \begin{pmatrix}u_1\\u_2\\...\\ u_{p} \end{pmatrix}$
+
+The BLUE estimator of $B$ is obtained computing: 
+
+$\hat{B} = (X^TX)^{-1}X^TY$
+
+```{r}
+mlm = function(Y,X){ # only the dependent and independent matrices are needed
+  B = ((solve(t(X)%*%X))%*%t(X))%*%Y
+  return(B)
+}
+```
+
+We have already defined $m_1$ and $m_2$, we can use them in the example:
+
+```{r}
+mlm(m1,m2)
+```
+
+```{}
+              [,1]        [,2]        [,3]
+[1,] 1.000000e+00  0.52192398  1.30694092
+[2,] 3.191891e-16 -0.00321913 -0.04507786
+[3,] 2.220446e-16  0.38327460  0.36584817
+
+```
+
+Now that we have this, we can now complete the [regressions section](#link1). However, it will be completed here (in order to keep the order of computation):
+
+## 1.3. Regressions (BIS)
+
+Assume we have $k$ explanatory variables (some compositional and some not) and $N$ observations. The dependent variable $Y$ can be compositional or not. In this first version there are four inputs: $Y$, the independent variable which can be compositional (comp=1) or not (comp=0), X is the list of non compositional variables and Z the list of compositional variables. Each variable inside the list is a matrix nxD (D≥1 the number of parts).
+
+Recall that the regression in the ILR coordinate space is defined by:
+
+$\mathrm{ilr}(\mathbf{Y}_i) = \mathbf{b}_0^*+ \sum_{q=1}^Q\mathrm{ilr}(\mathbf{X}_{qi})\mathbf{B}^*_q + \sum_{k=1}^K Z_{ki} \mathbf{b}^*_k + \mathrm{ilr}(\epsilon_i)$
+
+```{r}
+  c_lm = function(Y,X,Z,comp){ 
+    if (missing(X)){
+      X=list(matrix())
+    }
+    if (missing(Z)){
+      Z=list(matrix())
+    }
+    if (comp==1){
+      ty = ilr(Y)
+    }
+    else{
+      ty = Y
+    }
+    tx = matrix(NaN,dim(Y)[1])
+    if (!is.na(X[[1]][1,1])){
+      for (var in X){
+        tx = cbind(tx,var)
+      }
+    }
+    if (!is.na(Z[[1]][1,1])){
+      for (var in Z){
+        tx = cbind(tx,ilr(var))
+      }
+    }
+    tx = tx[,-1]
+    print("Transformed endogenous:")
+    print(ty)
+    print("--------------------------")
+    print("Transformed exogenous")
+    print(tx)
+    print("--------------------------")
+    
+    res = mlm(ty,tx)
+    print("B matrix in the ILR space:")
+    print(res)
+    print("--------------------------")
+    print("B in the simplex:")
+    print(inverseilr(t(res)))
+}
+```
+
+We should define new matrices, as the past ones had colinearity problems. 
+
+```{r}
+m1 = matrix(c(0.25,0.249999,0.2,0.2))
+m1 <- cbind(m1, c(10, 11, 192, 240))
+m1 <- cbind(m1, c(293, 323, 11, 20)) # definig the comp matrix
+
+m2 = matrix(c(0.25,201,0.2,222))
+m2 <- cbind(m2, c(0.3, 0.9, 202, 0.35))
+m2 <- cbind(m2, c(2033, 0.45, 0.5, 0.65)) # definig the non comp matrix
+
+a<-list(m1)
+```
+
+It works!! Of course, this function can be developed, to raise errors, s.deviations, etc, take "easier" inputs and print a more structured output. This is a basic version with the most necessary. 
+
+```{r}
+c_lm(m1,list(m2),comp=0) #there is no Z
+```
+
+```{}
+[1] "Transformed endogenous:"
+         [,1] [,2] [,3]
+[1,] 0.250000   10  293
+[2,] 0.249999   11  323
+[3,] 0.200000  192   11
+[4,] 0.200000  240   20
+[1] "--------------------------"
+[1] "Transformed exogenous"
+       [,1]   [,2]    [,3]
+[1,]   0.25   0.30 2033.00
+[2,] 201.00   0.90    0.45
+[3,]   0.20 202.00    0.50
+[4,] 222.00   0.35    0.65
+[1] "--------------------------"
+[1] "B matrix in the ILR space:"
+             [,1]        [,2]       [,3]
+[1,] 0.0010521843 0.615986413 0.77286824
+[2,] 0.0009892904 0.948249071 0.05572805
+[3,] 0.0001226943 0.004707011 0.14401305
+[1] "--------------------------"
+[1] "B in the simplex:"
+          [,1]      [,2]      [,3]      [,4]
+[1,] 0.2250829 0.3717437 0.3019552 0.1012181
+[2,] 0.2210437 0.4788849 0.1559449 0.1441265
+[3,] 0.2493801 0.2503049 0.2755440 0.2247710
+```
+
