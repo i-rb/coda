@@ -1147,7 +1147,7 @@ c_lm(m1,list(m2),comp=0) #there is no Z
 
 
 
-## Creating a Class
+# Creating a Class
 
 I have never done this before but I will try to replicate the approach used by the 'compositions' package: create a class and "change" the definition of the operators within that class. E.g: The operator "+" between two arguments in the standard class (does it have a name?) will sum up as always: 2+2=4. However, if those two arguments $x$, $y$ come from the 'compositional' class (i.e. they are comp. variables), addition would mean $\oplus$. Id est, $x\oplus y := x+y$ in the code. The class represents the Aitchison geometry. 
 
