@@ -1145,3 +1145,84 @@ c_lm(m1,list(m2),comp=0) #there is no Z
 [3,] 0.2493801 0.2503049 0.2755440 0.2247710
 ```
 
+
+
+## Creating a Class
+
+I have never done this before but I will try to replicate the approach used by the 'compositions' package: create a class and "change" the definition of the operators within that class. E.g: The operator "+" between two arguments in the standard class (does it have a name?) will sum up as always: 2+2=4. However, if those two arguments $x$, $y$ come from the 'compositional' class (i.e. they are comp. variables), addition would mean $\oplus$. Id est, $x\oplus y := x+y$ in the code. The class represents the Aitchison geometry. 
+
+First, we define the class and the function 'as' to convert objects to this class.
+
+```{r} 
+as.comp <- function(x){
+  if(!inherits(x, "comp")) class(x) <- c("comp", class(x))
+  C(x)
+}
+
+```
+
+```{r}
+x1c = as.comp(x1)
+x2c = as.comp(x2)
+x1c
+```
+
+```{}
+           [,1]      [,2]      [,3]      [,4]
+[1,] 0.04761905 0.3174603 0.1587302 0.4761905
+attr(,"class")
+[1] "comp"   "matrix"
+ 
+```
+
+
+Now, we should define the sum for this class (it is called 'overload' in R), which is the perturbation.
+
+```{r}
+`+.comp` = function(e1, e2){
+  pt(e1,e2)
+}
+```
+
+We can check that $x_1' + x_2' = C(x_1) \oplus C(x_2)$ where $x_i'$s belong to the new class.
+
+```{r}
+x1c+x2c
+```
+
+```{}
+           [,1]      [,2]      [,3]      [,4]
+[1,] 0.05325444 0.1183432 0.1183432 0.7100592
+attr(,"class")
+[1] "comp"   "matrix"
+```
+
+
+```{r}
+pt(x1, x2)
+```
+
+```{}
+           [,1]      [,2]      [,3]      [,4]
+[1,] 0.05325444 0.1183432 0.1183432 0.7100592
+```
+
+In the compositional package class (acomp, there three/four more)... 
+
+```{r}
+acomp(x1)+acomp(x2)
+```
+
+```{}
+           [,1]       [,2]      [,3]      [,4]     
+[1,] 0.05325444 0.1183432 0.1183432 0.7100592
+attr(,"class")
+[1] acomp
+```
+
+Two differences stand out. The first is the function for defining the class. I prefer 'their' form (acomp(x1) or comp(x1) than as.comp(x1)). Second, the object created in our class has two classes, as it retains the original one. Is this better or worse?
+
+I will correct the former.
+
+
+
