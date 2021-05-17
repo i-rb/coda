@@ -10,7 +10,7 @@ output:
     toc: yes
 ---
 
-# Introduction to Compositional Data
+# 1. Introduction to Compositional Data
 
 In this notebook I am computing the functions that are mentioned in the _Week 1 Report_. When possible, I compare my results with those obtained via the 'compositions' package.
 
@@ -1012,7 +1012,7 @@ balance(m1,c(2),c(1,3))
 [4,]  0.12586350
 ```
 
-# Multivariate General Linear Model
+# 2. Multivariate General Linear Model
 
 ## 2.2 Estimation
 
@@ -1147,7 +1147,7 @@ c_lm(m1,list(m2),comp=0) #there is no Z
 
 
 
-# Creating a Class
+# 3. Creating a Class
 
 I have never done this before but I will try to replicate the approach used by the 'compositions' package: create a class and "change" the definition of the operators within that class. E.g: The operator "+" between two arguments in the standard class (does it have a name?) will sum up as always: 2+2=4. However, if those two arguments $x$, $y$ come from the 'compositional' class (i.e. they are comp. variables), addition would mean $\oplus$. Id est, $x\oplus y := x+y$ in the code. The class represents the Aitchison geometry. 
 
@@ -1155,7 +1155,7 @@ First, we define the class and the function 'as' to convert objects to this clas
 
 ```{r} 
 as.comp <- function(x){
-  if(!inherits(x, "comp")) class(x) <- c("comp", class(x))
+  if(!inherits(x, "comp")) class(x) <- c("comp", class(x)) # this is to keep the original class
   C(x)
 }
 
@@ -1220,9 +1220,148 @@ attr(,"class")
 [1] acomp
 ```
 
-Two differences stand out. The first is the function for defining the class. I prefer 'their' form (acomp(x1) or comp(x1) than as.comp(x1)). Second, the object created in our class has two classes, as it retains the original one. Is this better or worse?
+Two differences stand out. The first is the function for defining the class. I prefer 'their' form (acomp(x1) or comp(x1) than as.comp(x1)). Second, the object created in our class is decided to have two classes, as it retains the original one. Is this better or worse?
 
-I will correct the former.
+I will correct the former. I do not know if this is the most suitable approach.
 
+```{r}
+cc = function(var){
+  return(as.comp(var))
+}
+```
+
+```{r}
+cc(x1)
+```
+
+```{}
+           [,1]      [,2]      [,3]      [,4]
+[1,] 0.04761905 0.3174603 0.1587302 0.4761905
+attr(,"class")
+[1] "comp"   "matrix"
+```
+
+Of course, it is possible to extend all the functions already created to this class. Here, as an example, I overload the "*" operator to include the powering function.
+
+```{r}
+`*.comp` = function(e1, e2){
+  pw(e1,e2)
+}
+```
+
+```{r}
+pw(2,cc(x1))
+```
+
+```{}
+            [,1]      [,2]       [,3]      [,4]
+[1,] 0.006387509 0.2838893 0.07097232 0.6387509
+attr(,"class")
+[1] "comp"   "matrix"
+```
+
+
+# 4. Example: Using the functions.
+
+In this last section of this report, I will use most of these functions with some variables from the dataset "BDDSegX_ext.RData", which is the 'extension' of the 'BDDSegX.RData'. (Ofcourse, this dataset is not uploaded to GitHub, as it is the notebook).
+
+I will use the simulated variables instead of the real ones, as this is what is finally going to be done to illustrate the package. (This may be uploaded)
+
+```{r}
+load("/Users/ivanrendobarreiro/Documents/m1_econometrics/internship/week1/data_db/BDDSegX_ext.RData")
+
+simData = BDDSegX[c("SimS_A", "SimS_B", "SimS_C", "SimS_D", "SimS_E")] #keeep simulated vars
+```
+
+
+Each column of the dataframe kept is one of the five parts of a component variable which represents the share of the market that holds each firm.
+
+### Function 1. Which of these variables are compositional?
+
+If we take each of this variables separately, they cannot be compositional. However, they should be if we consider them jointly as a variable. 
+
+```{r}
+list_of_variables = list(simData$SimS_A, simData$SimS_B, simData$SimS_C, simData$SimS_D, simData$SimS_E)
+which_coda(list_of_variables)
+```
+
+```{}
+[1] 0 0 0 0 0
+```
+
+
+If considered jointly:
+
+```{r}
+list_of_variables = list(simData)
+which_coda(list_of_variables, eps=0.00001)
+```
+
+```{}
+[1] 1
+```
+
+
+### Function 2. Closed form operator.
+
+Here we already have a compositional variable in its closed form. However, the operation could be applied anyway (remember $\mathcal{C}(\mathcal{C}(x))=\mathcal{C}(x)$). Therefore, I will choose k=100, the total sum:
+
+```{r}
+as.matrix(head(C(simData,100))) # as matrix bc of visualization in RStudio, nothing else
+```
+
+```{}
+    SimS_A   SimS_B   SimS_C   SimS_D   SimS_E
+1 6.927409 37.20303 31.69218 14.99224 9.185135
+2 7.309030 32.95972 35.92120 15.57412 8.235921
+3 6.434496 30.51185 35.79021 18.55172 8.711717
+4 5.828921 38.77071 34.24847 15.93945 5.212451
+5 6.788980 36.57509 35.83543 14.24930 6.551202
+6 5.915786 36.47729 37.25225 12.94232 7.412360
+```
+
+
+### Function 3. Naive Ternary plot (from scratch).
+
+This makes no sense. Instead of this, a matrix plot of ternary diagrams should be used, but I have not computed it (yet).
+
+
+### Function 4. The perturbation.
+
+First, we tranform the simData object to a 'comp' class object (say $y$). Then, we compute $y\oplus y$.
+
+```{r}
+comp_simData = cc(simData) 
+head(as.matrix(comp_simData + comp_simData))
+```
+
+```{}
+        SimS_A    SimS_B    SimS_C    SimS_D    SimS_E
+[1,] 0.1385482 0.7440606 0.6338436 0.2998448 0.1837027
+[2,] 0.1461806 0.6591945 0.7184241 0.3114824 0.1647184
+[3,] 0.1286899 0.6102370 0.7158043 0.3710345 0.1742343
+[4,] 0.1165784 0.7754142 0.6849693 0.3187890 0.1042490
+[5,] 0.1357796 0.7315018 0.7167086 0.2849859 0.1310240
+[6,] 0.1183157 0.7295458 0.7450450 0.2588463 0.1482472
+```
+
+
+### Function 5. The powering.
+
+We check that $y\oplus y = 2\odot y$:
+
+```{r}
+head(as.matrix(2*comp_simData))
+```
+
+```{}
+        SimS_A    SimS_B    SimS_C    SimS_D    SimS_E
+[1,] 0.1385482 0.7440606 0.6338436 0.2998448 0.1837027
+[2,] 0.1461806 0.6591945 0.7184241 0.3114824 0.1647184
+[3,] 0.1286899 0.6102370 0.7158043 0.3710345 0.1742343
+[4,] 0.1165784 0.7754142 0.6849693 0.3187890 0.1042490
+[5,] 0.1357796 0.7315018 0.7167086 0.2849859 0.1310240
+[6,] 0.1183157 0.7295458 0.7450450 0.2588463 0.1482472
+```
 
 
