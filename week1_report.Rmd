@@ -478,10 +478,26 @@ norm(x1c-x2c) # composition package norm
 
 The linear operator is defined as $A\boxdot\mathbf{x} = \mathcal{C}\left(\prod_{j=1}^D x_j^{a_{1j}},...,\prod_{j=1}^D x_j^{a_{Dj}}\right)^T$ for $A$ a DxD matrix and $x$ a 1xD vector.
 
-ADD PROPERTY CHECK 
+There are certain properties that the matrix $A$ should meet in order to represent a endomorphism in $\mathcal{S}^D$. This first function check them (there are 4).
+
+```{r}
+check_endo = function(A){ # A is the matrix
+  if (!(is.numeric(A))){return(FALSE)} # it is a real matrix
+  if (!(dim(A)[1]==dim(A)[2])){return(FALSE)} # it is a square matrix
+  if (!(sum(round(rowSums(A),3)==(numeric(dim(A)[1])))==(dim(A)[1]))){return(FALSE)} # rows sum 0
+  if (!(sum(colSums(A)==(numeric(dim(A)[1])))==(dim(A)[1]))){return(FALSE)} # cols sum 0 
+  # if (!((qr(ilr(A))$rank)==(qr(A)$rank))){return(FALSE)} # rank(A)==rank(A*) I CANNOT GET THIS nor
+  # ilr(A) == Id_D-1 (CANNOT GET THE ILR)
+  return(TRUE)
+}
+```
+
 
 ```{r}
 lin = function (A, x){ # A matrix, x vector 1xD
+  if (!(check_endo(A))){
+    print("Non suitable endomorphism.")
+    return(FALSE)}
   vec=numeric(length(x))
   c=0
   for (i in 1:nrow(A)){
@@ -497,10 +513,15 @@ Here the function is tested:
 ```{r}
   v3=matrix(c(0.4,0.2,0.4)) # defining a vector
 
-  m3 = matrix(c(0.4,0.4,0.3))
-  m3 <- cbind(m3, c(0.3,0.1,0.3)) # defining a square matrix
-  m3 <- cbind(m3, c(0.2,0.5,0.4)) 
-  lin(m3,v3)
+  m9 = matrix(c(1/3,-2/3,1/3))
+  m9 <- cbind(m9, c(1/3,1/3,-2/3)) # defining a square matrix
+  m9 <- cbind(m9, c(-2/3,1/3,1/3)) 
+
+  lin(m9,v3)
+```
+
+```{r}
+lin(m1,v3)
 ```
 
 ```{}
@@ -1195,6 +1216,7 @@ mlm(m1,m4)
 Now that we have this, we can now complete the [regressions section](#link1). However, it will be completed here (in order to keep the order of computation):
 
 ## 1.3. Regressions (BIS)
+### Function 19. Complete Regression.
 
 Assume we have $k$ explanatory variables (some compositional and some not) and $N$ observations. The dependent variable $Y$ can be compositional or not. In this first version there are four inputs: $Y$, the independent variable which can be compositional (comp=1) or not (comp=0), X is the list of non compositional variables and Z the list of compositional variables. Each variable inside the list is a matrix nxD (D≥1 the number of parts).
 
@@ -1297,6 +1319,105 @@ mlm(C(m1),C(m2)) # but this is the direct regression. Not taking into account th
 
 
 I should add the intercept case.
+
+
+### Function 20. Variance-covariance matrices.
+
+In order to obtain the estimator of the variance matrix of the parameters, first it is needed to estimate the common covariance structure $\Sigma$. Recall that $\mathrm{cov}(Y)=I_n\otimes \Sigma$. Then: 
+
+$\hat{\Sigma}=\dfrac{Y'(I-X(X'X)^{-1}X')Y}{n}=\dfrac{(Y-X\hat{B})'(Y-X\hat{B})}{n}$
+
+```{r}
+est_var = function(X,Y){ # page 146 kevin
+  B=mlm(X,Y)
+  n=dim(Y)[1]
+  sig = (1/n)*t(Y-X%*%B)%*%(Y-X%*%B)
+  return(sig)
+}
+```
+
+```{r}
+est_var(m1,m2)
+```
+
+Now we can use the $\mathrm{cov}(\hat{\beta})$ estimator from the Kevin book:
+
+```{r}
+# p 145 Kevin (5.13)
+
+b_cov = function(X,Y){
+  sig = est_var(X,Y)
+  cov = kronecker(sig,solve(t(X)%*%X))
+  return(round(cov,5))
+}
+
+```
+
+```{r}
+b_cov(m1,m2)
+```
+ 
+Now it is possible to update with this info the general 'c_lm' function:
+
+```{r} 
+  c_lm = function(Y,X,Z,comp,infocov){ #infocov = TRUE if info about covariances desired (sometimes too large)
+    if (missing(X)){
+      X=list(matrix())
+    }
+    if (missing(Z)){
+      Z=list(matrix())
+    }
+    if (comp==1){
+      ty = ilr(Y)
+    }
+    else{
+      ty = Y
+    }
+    tx = matrix(NaN,dim(Y)[1])
+    if (!is.na(X[[1]][1,1])){
+      for (var in X){
+        tx = cbind(tx,compositions::ilr(var)) ## here compositions::ilr to recover their result
+      }
+    }
+    if (!is.na(Z[[1]][1,1])){
+      for (var in Z){
+        tx = cbind(tx,var)
+      }
+    }
+    tx = tx[,-1]
+
+    print("Transformed endogenous:")
+    print(ty)
+    print("--------------------------")
+    print("Transformed exogenous")
+    print(tx)
+    print("--------------------------")
+    
+    res = mlm(ty,tx)
+    print("B matrix in the ILR space:")
+    print(res)
+    print("--------------------------")
+    print("B in the simplex:")
+    print(inverseilr(t(res)))
+    if(missing(infocov)){infocov=FALSE}
+    if (infocov==TRUE){
+      info = b_cov(tx,ty)
+      print("--------------------------")
+      print("Covariance Matrix Est.:")
+      print(info)
+    }
+  }
+```
+
+```{r}
+c_lm(X=list(m2),Y=m1,comp=1,infocov=TRUE)
+```
+
+```{r}
+m2
+```
+
+
 
 # 3. Creating a Class
 
