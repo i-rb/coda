@@ -10,6 +10,13 @@ output:
     toc: yes
 ---
 
+### To Do:
+
+  *   fix the regression to obtain same results than 'compositions'
+  *   add constant option to the regression 
+  *   finish ternary plots (add details like Thibault)
+  
+
 # 1. Introduction to Compositional Data
 
 In this notebook I am computing the functions that are mentioned in the _Week 1 Report_. When possible, I compare my results with those obtained via the 'compositions' package.
