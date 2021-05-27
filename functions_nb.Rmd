@@ -1,0 +1,105 @@
+---
+title: "Package Functions (Week 3)"
+output:
+  html_notebook:
+    toc: yes
+  html_document:
+    df_print: paged
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+
+# Preliminary Functions (format, maybe warnings and so)
+
+# Transformation functions (ilr, inverseolr,...)
+
+## Function that creates the Helmert Matrix
+
+If $V$ (contrast matrix) is not passed, computations are done with the Helmert Matrix as default.
+
+```{r} 
+# Creates de Helmert Matrix given the number of parts of the variable
+V_D = function(D){ # D is the dimension (parts)
+  V_D = matrix(0L, nrow =D , ncol = D-1)
+  for (i in 1:(D-1)){  # pseudodiagonal elements
+    V_D[i,i] = (D-i)/(sqrt((D-i+1)*(D-i)))
+  }
+  for (i in 2:D){ # below pseudodiagonal elements
+    for (j in 1:i-1){
+      V_D[i,j]=-1/(sqrt((D-j+1)*(D-j)))
+    }
+  } 
+  return(V_D)
+}
+```
+
+```{r}
+V_D(3)
+```
+
+
+
+```{r}
+ilr = function(x){ # x matrix N x D
+  x = C(x)
+  V = V_D(dim(x)[2]) 
+  return(t(t(V)%*%t(log(x))))
+}
+```
+
+
+
+# Functions for the Regression
+
+Assume we have $k$ explanatory variables (some compositional and some not) and $N$ observations. The dependent variable $Y$ can be compositional or not. In this first version there are four inputs: $Y$, the independent variable which can be compositional (comp=1) or not (comp=0), X is the list of non compositional variables and Z the list of compositional variables. Each variable inside the list is a matrix nxD (D≥1 the number of parts).
+
+Recall that the regression in the ILR coordinate space is defined by:
+
+$\mathrm{ilr}(\mathbf{Y}_i) = \mathbf{b}_0^*+ \sum_{q=1}^Q\mathrm{ilr}(\mathbf{X}_{qi})\mathbf{B}^*_q + \sum_{k=1}^K Z_{ki} \mathbf{b}^*_k + \mathrm{ilr}(\epsilon_i)$
+
+
+```{r}
+  c_lm = function(Y,X,Z,comp){ 
+    if (missing(X)){
+      X=list(matrix())
+    }
+    if (missing(Z)){
+      Z=list(matrix())
+    }
+    if (comp==1){
+      ty = ilr(Y)
+    }
+    else{
+      ty = Y
+    }
+    tx = matrix(NaN,dim(Y)[1])
+    if (!is.na(X[[1]][1,1])){
+      for (var in X){
+        tx = cbind(tx,ilr(var)) ## here compositions::ilr to recover their result
+      }
+    }
+    if (!is.na(Z[[1]][1,1])){
+      for (var in Z){
+        tx = cbind(tx,var)
+      }
+    }
+    tx = tx[,-1]
+    print("Transformed endogenous:")
+    print(ty)
+    print("--------------------------")
+    print("Transformed exogenous")
+    print(tx)
+    print("--------------------------")
+    
+    res = mlm(ty,tx)
+    print("B matrix in the ILR space:")
+    print(res)
+    print("--------------------------")
+    print("B in the simplex:")
+    print(inverseilr(t(inverseilr(t(res)))))
+  }
+```
+
+
+# Functions on Impacts
