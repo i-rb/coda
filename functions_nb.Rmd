@@ -102,10 +102,6 @@ mlm = function(Y,X){ # only the dependent and independent matrices are needed
 }
 ```
 
-```{r}
-mlm(m2,m1)
-```
-
 ## Estimation of the variance
 
 
@@ -152,12 +148,13 @@ $\mathrm{ilr}(\mathbf{Y}_i) = \mathbf{b}_0^*+ \sum_{q=1}^Q\mathrm{ilr}(\mathbf{X
 ```{r} 
 # eq 4 ASJ paper (Ngyugen, Laurent, Thomas-Agnan, Ruiz-Gazen)
 
+# VERSION 1.0.0
+
 xy_reg = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...)
    print("XY REGRESSION")
    print("===========================")
    if (is.na(V[[1]][1,1])){
-    V=list(V_D(dim(Y)[2])) # can I upgrade this with that thing of Thibault? numeric(n) better than numeric()?
-    # this the 'standard' contrast matrix for Y
+    V=list(V_D(dim(Y)[2])) # this the 'standard' contrast matrix for Y
     for (i in 1:length(X)){ # here 'standard' contrast matrices for X are added
       V=c(V,list(V_D(dim(X[i][[1]])[2]))) 
     }
@@ -165,12 +162,12 @@ xy_reg = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE){ 
   # here I transform the Y and X to the space of coordinates
   ty = ilr(Y, V[[1]])
   dimD=dim(Y)[2]
-  tx = matrix(numeric(dim(X[[1]])[1]*(dimD-1)),dim(X[[1]])[1])+1 # here it is created a matrix which is a vector of ones (should be removed afterwords if c=False)
+  tx = matrix(numeric(dim(X[[1]])[1]))+1 # here it is created a matrix which is a vector of ones (should be removed afterwords if c=False)
   for (i in 1:length(X)){
     tx = cbind(tx,ilr(X[[i]],V[[i+1]])) # the transformed X is created as a unique matrix
   }
   if(c==FALSE){
-    tx=tx[,dimD:dim(tx)[2]]
+    tx=tx[,-1]
     } # should remove the vector of zeros
   # adding constant Z to the independant variables in the coordinate space
   if (!is.na(Z[[1]][1,1])){
@@ -178,34 +175,33 @@ xy_reg = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE){ 
       tx=cbind(tx,z)
     }
   }
+  #return(list(tx,ty))
   Bstar = mlm(ty,tx)
   print("B* in the coordinates space:")
   print(Bstar)
   print("---------------------------")
-  h=1
   if (c==TRUE){
-    b0=inverseilr(Bstar[h:(dimD-1),],V[[1]])
+    b0=inverseilr(t(Bstar[1,]),V[[1]])
     print("b0 in the simplex:")
     print(b0)
   }
-  h=dimD
-  if (c==FALSE){
-    h=1
-  }
+  h=2
   print("---------------------------")
   for (i in 1:length(X)){
     print(paste("B (in the simplex) for the comp. variable, X", i, sep=""))
     dimx = dim(X[[i]])[2] #number of parts of this variable i of X D parts --> D-1 param in B*
-    matrix_x = Bstar[h:(h+dimx-2),]
-    B_q = V[[1]]%*%matrix_x%*%t(V[[i+1]])
+    if (h==(h+dimx-2)){matrix_x = t(matrix(Bstar[h,]))}
+    if (h!=(h+dimx-2)){matrix_x = Bstar[h:(h+dimx-2),] }
+    B_q = V[[1]]%*%t(matrix_x)%*%t(V[[i+1]])
     h=h+dimx-1
-    print(B_q)
+    print(t(B_q))
   }
   print("---------------------------")
   for (i in 1:length(Z)){
     print(paste("B (in the simplex) for the non-comp. variable, Z", i, sep=""))
     dimz = dim(Z[[i]])[2]
-    matrix_z = Bstar[h:(h+dimz-1),] # it is non comp, it does not lose a dimension in the transformation
+    if (h==(h+dimz-1)){matrix_z = t(matrix(Bstar[h,]))}
+    if (h!=(h+dimz-1)){matrix_z = Bstar[h:(h+dimz-1),]} # it is non comp, it does not lose a dimension in the transformation
     h=h+dimz-1
     c_k = inverseilr(matrix_z, V[[1]])
     print(c_k)
@@ -214,10 +210,18 @@ xy_reg = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE){ 
 ```
 
 
+
 ```{r}
-m1 = rbind(c(0.25,0.75),c(0.5,0.5),c(0.9,0.1),c(0.33,0.64),c(0.2,0.8),c(0.91,0.09)) # 2 parts, n=4
-m2 = rbind(c(0.1,0.4,0.5),c(0.3,0.3,0.4),c(0.9,0.05,0.05),c(0.1,0.7,0.2),c(0.8,0.1,0.1),c(0.35,0.25,0.4)) # 2 parts, n=4
-m3 = matrix(c(23,1,32,12,9,11)) # 2 parts, n=4
+ss = xy_reg(Y = m1, X = list(m2,m4), Z=list(m5), c=TRUE)
+```
+WHEN I ADD m3 to Z I always get a singular matrix in X'X how is this possible?
+
+```{r}
+m1 = rbind(c(0.25,0.3,0.2),c(0.5,0.2,0.3),c(0.9,0.05,0.05),c(0.33,0.4,0.24),c(0.2,0.3,0.5),c(0.91,0.05,0.04),c(0.1,0.7,0.2)) 
+m2 = rbind(c(0.1,0.4,0.25,0.25),c(0.3,0.3,0.3,0.1),c(0.9,0.05,0.02,0.03),c(0.1,0.7,0.15,0.05),c(0.8,0.1,0.05,0.05),c(0.35,0.25,0.3,0.1),c(0.4,0.1,0.1,0.4)) 
+m3 = matrix(c(23,1,32,12,9,11,3)) 
+m4 = rbind(c(0.2,0.8),c(0.3,0.7),c(0.9,0.1),c(0.75,0.25),c(0.3,0.7),c(0.15,0.85),c(0.9,0.1))
+m5 = rbind(c(3,-4.3),c(0,-2),c(4,5),c(-2,3), c(4,2), c(1,11), c(23,2))
 ```
 
 xy_reg works quite well. To do:
@@ -227,9 +231,6 @@ xy_reg works quite well. To do:
 - add covariance and those things of the mvn package. (copy its report, but no testing)
 
 
-```{r}
-xy_reg(Y = m1, X = list(m2), Z = list(m3), c=TRUE)
-```
 
 
 ### y reg
@@ -282,7 +283,7 @@ y_reg = function(Y,Z=list(matrix()),V=list(matrix()),c=TRUE){ # Y dependent, X i
 
 ```
 
-I feel that this would works if xy_reg works. It is only a particular case
+I feel that this would works if xy_reg works. It is only a particular case of the xy reg. (IT DOES NOT WORK WELL)
 
 ```{r}
 y_reg(Y=m1, Z=list(m3), c=TRUE)
@@ -300,14 +301,14 @@ reg(Y=..., X=..., Z=,..., Ycomp=TRUE/FALSE, c=TRUE/FALSE) # where Ycomp indicate
 
 
 ```{r} 
-# eq 4 ASJ paper (Ngyugen, Laurent, Thomas-Agnan, Ruiz-Gazen)
+
+# version 1.0.0 using version 1.0.0 of xy_reg
 
 xy_reg2 = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...)
    print("XY REGRESSION")
    print("===========================")
    if (is.na(V[[1]][1,1])){
-    V=list(V_D(dim(Y)[2])) # can I upgrade this with that thing of Thibault? numeric(n) better than numeric()?
-    # this the 'standard' contrast matrix for Y
+    V=list(V_D(dim(Y)[2])) # this the 'standard' contrast matrix for Y
     for (i in 1:length(X)){ # here 'standard' contrast matrices for X are added
       V=c(V,list(V_D(dim(X[i][[1]])[2]))) 
     }
@@ -315,12 +316,12 @@ xy_reg2 = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE){
   # here I transform the Y and X to the space of coordinates
   ty = ilr(Y, V[[1]])
   dimD=dim(Y)[2]
-  tx = matrix(numeric(dim(X[[1]])[1]*(dimD-1)),dim(X[[1]])[1])+1 # here it is created a matrix which is a vector of ones (should be removed afterwords if c=False)
+  tx = matrix(numeric(dim(X[[1]])[1]))+1 # here it is created a matrix which is a vector of ones (should be removed afterwords if c=False)
   for (i in 1:length(X)){
     tx = cbind(tx,ilr(X[[i]],V[[i+1]])) # the transformed X is created as a unique matrix
   }
   if(c==FALSE){
-    tx=tx[,dimD:dim(tx)[2]]
+    tx=tx[,-1]
     } # should remove the vector of zeros
   # adding constant Z to the independant variables in the coordinate space
   if (!is.na(Z[[1]][1,1])){
@@ -328,38 +329,37 @@ xy_reg2 = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE){
       tx=cbind(tx,z)
     }
   }
+  #return(list(tx,ty))
   Bstar = mlm(ty,tx)
-  covb = b_cov(tx,ty,Bstar)
   print("B* in the coordinates space:")
   print(Bstar)
   print("---------------------------")
-  h=1
+  print("Matrix of Var/Covar of B*")
+  print(b_cov(tx,ty,Bstar))
+  
+  print("============================")
   if (c==TRUE){
-    b0=inverseilr(Bstar[h:(dimD-1),],V[[1]])
+    b0=inverseilr(t(Bstar[1,]),V[[1]])
     print("b0 in the simplex:")
     print(b0)
   }
-  h=dimD
-  if (c==FALSE){
-    h=1
-  }
+  h=2
   print("---------------------------")
-  print("Variance matrix of the parameters:")
-  print(covb)
-  print("===========================")
   for (i in 1:length(X)){
     print(paste("B (in the simplex) for the comp. variable, X", i, sep=""))
     dimx = dim(X[[i]])[2] #number of parts of this variable i of X D parts --> D-1 param in B*
-    matrix_x = Bstar[h:(h+dimx-2),]
-    B_q = V[[1]]%*%matrix_x%*%t(V[[i+1]])
+    if (h==(h+dimx-2)){matrix_x = t(matrix(Bstar[h,]))}
+    if (h!=(h+dimx-2)){matrix_x = Bstar[h:(h+dimx-2),] }
+    B_q = V[[1]]%*%t(matrix_x)%*%t(V[[i+1]])
     h=h+dimx-1
-    print(B_q)
+    print(t(B_q))
   }
   print("---------------------------")
   for (i in 1:length(Z)){
     print(paste("B (in the simplex) for the non-comp. variable, Z", i, sep=""))
     dimz = dim(Z[[i]])[2]
-    matrix_z = Bstar[h:(h+dimz-1),] # it is non comp, it does not lose a dimension in the transformation
+    if (h==(h+dimz-1)){matrix_z = t(matrix(Bstar[h,]))}
+    if (h!=(h+dimz-1)){matrix_z = Bstar[h:(h+dimz-1),]} # it is non comp, it does not lose a dimension in the transformation
     h=h+dimz-1
     c_k = inverseilr(matrix_z, V[[1]])
     print(c_k)
@@ -369,40 +369,44 @@ xy_reg2 = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE){
 
 
 ```{r}
-xy_reg2(Y = m1, X = list(m2), Z = list(m3), c=TRUE)
+xy_reg2(Y = m1, X = list(m2), Z = list(m5), c=TRUE)
 ```
+
+
 
 I guess this is more or less all the info we would like to present, but with a different format.
 
 
-
 ## Copying the (format of) mvn package. It is not, mvn is it?
 
-Two ways of output: ilr (default) or simplex spaces. I'll construct -by the moment- the former (xy_reg3). This is the 
+Two ways of output: ilr (default) or simplex spaces. I'll construct -by the moment- the former (xy_reg3). This is the format I would like to replicate: 
 
+![Figure 1: Format of the output](https://raw.githubusercontent.com/i-rb/coda/main/img/eg.png)
+It is very important to recall that:
+
+$cov(\beta_{aj},\beta_{bk})=\Sigma_{jk}(X'TX)^{-1}_{ab}$ where $a,b\in{1,..,P}$ variables of $X$ and $j,k\in\{1,...,D}$ parts of Y. (This is from Multivariate Linear Models.
+Stanley Sawyer — Washington University. 'multivar_covs' in my PC). 
 
 ```{r} 
-# eq 4 ASJ paper (Ngyugen, Laurent, Thomas-Agnan, Ruiz-Gazen)
+# VERSION 1.0.0
+# using version 1.0.0 of xy_reg2 1.0.0 
 
 xy_reg3 = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...)
-   print("XY REGRESSION")
-   print("===========================")
    if (is.na(V[[1]][1,1])){
-    V=list(V_D(dim(Y)[2])) # can I upgrade this with that thing of Thibault? numeric(n) better than numeric()?
-    # this the 'standard' contrast matrix for Y
+    V=list(V_D(dim(Y)[2])) # this the 'standard' contrast matrix for Y
     for (i in 1:length(X)){ # here 'standard' contrast matrices for X are added
       V=c(V,list(V_D(dim(X[i][[1]])[2]))) 
     }
-  }
+   }
   # here I transform the Y and X to the space of coordinates
   ty = ilr(Y, V[[1]])
   dimD=dim(Y)[2]
-  tx = matrix(numeric(dim(X[[1]])[1]*(dimD-1)),dim(X[[1]])[1])+1 # here it is created a matrix which is a vector of ones (should be removed afterwords if c=False)
+  tx = matrix(numeric(dim(X[[1]])[1]))+1 # here it is created a matrix which is a vector of ones (should be removed afterwords if c=False)
   for (i in 1:length(X)){
     tx = cbind(tx,ilr(X[[i]],V[[i+1]])) # the transformed X is created as a unique matrix
   }
   if(c==FALSE){
-    tx=tx[,dimD:dim(tx)[2]]
+    tx=tx[,-1]
     } # should remove the vector of zeros
   # adding constant Z to the independant variables in the coordinate space
   if (!is.na(Z[[1]][1,1])){
@@ -410,52 +414,117 @@ xy_reg3 = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE){
       tx=cbind(tx,z)
     }
   }
+  #return(list(tx,ty))
   Bstar = mlm(ty,tx)
-  covb = b_cov(tx,ty,Bstar)
-  print("B* in the coordinates space:")
-  print(Bstar)
-  print("---------------------------")
-  h=1
+  bcov = b_cov(tx,ty,Bstar)
+  #print(bcov)
   if (c==TRUE){
-    b0=inverseilr(Bstar[h:(dimD-1),],V[[1]])
-    print("b0 in the simplex:")
-    print(b0)
+    b0=inverseilr(t(Bstar[1,]),V[[1]])
   }
-  h=dimD
-  if (c==FALSE){
-    h=1
-  }
-  print("---------------------------")
-  print("Variance matrix of the parameters:")
-  print(covb)
-  print("===========================")
+  h=2
   for (i in 1:length(X)){
-    print(paste("B (in the simplex) for the comp. variable, X", i, sep=""))
     dimx = dim(X[[i]])[2] #number of parts of this variable i of X D parts --> D-1 param in B*
-    matrix_x = Bstar[h:(h+dimx-2),]
-    B_q = V[[1]]%*%matrix_x%*%t(V[[i+1]])
+    if (h==(h+dimx-2)){matrix_x = t(matrix(Bstar[h,]))}
+    if (h!=(h+dimx-2)){matrix_x = Bstar[h:(h+dimx-2),] }
+    B_q = V[[1]]%*%t(matrix_x)%*%t(V[[i+1]])
     h=h+dimx-1
-    print(B_q)
+    B_q = t(B_q)
   }
-  print("---------------------------")
   for (i in 1:length(Z)){
-    print(paste("B (in the simplex) for the non-comp. variable, Z", i, sep=""))
     dimz = dim(Z[[i]])[2]
-    matrix_z = Bstar[h:(h+dimz-1),] # it is non comp, it does not lose a dimension in the transformation
+    if (h==(h+dimz-1)){matrix_z = t(matrix(Bstar[h,]))}
+    if (h!=(h+dimz-1)){matrix_z = Bstar[h:(h+dimz-1),]} # it is non comp, it does not lose a dimension in the transformation
     h=h+dimz-1
     c_k = inverseilr(matrix_z, V[[1]])
-    print(c_k)
   }
+  dimilrY = dim(Y)[2]-1
+  mo = dimilrY
+  dimvar = dim(bcov)[2]/mo
+  names = list("y_ilr1")
+  dfres = data.frame(Bstar[,1])
+  if (dimilrY>1){
+    for (i in 2:dimilrY){
+      dfres = cbind(dfres,Bstar[,i])
+      name = paste("y_ilr", i, sep="")
+      names[[i]]=name
+      }
+  }
+  colnames(dfres) = names
+  for (j in mo:1){
+    sd = numeric(dim(bcov)[2]/mo)
+    for (i in (dim(bcov)[2]/mo):1){
+      sd[i]=sqrt(bcov[(i-1)*mo+j,(i-1)*mo+j])
+    }
+    if (j==mo){
+      dfres = cbind(dfres,sd)
+    }
+    if (j!=mo){
+      dfres = cbind(dfres[1:j],sd,dfres[(j+1):(dim(dfres)[2])])
+    }
+  }
+  
+  
+  # renaming
+  rname = c("(intercept)")
+  for (i in 1:length(X)){
+    for (j in 1:((dim(X[[i]])[2])-1)){
+    newname = paste("Xilr_",i,"_",j,sep="")
+    rname = c(rname, newname)
+    }
+  }
+  if (!is.na(Z[[1]][1,1])){
+    for (i in 1:length(Z)){
+      for (j in 1:(dim(Z[[i]])[2])){
+      newname = paste("Z_",i,"_",j,sep="")
+      rname = c(rname, newname)
+      }
+    }
+  }
+  rownames(dfres)=rname
+  return(dfres)
 }
 ```
 
+The original output is a DataFrame (I don't like it):
+
+```{r}
+xy_reg3(m1,list(m2),list(m5))
+```
 
 
+I prefer the plain text matrix:
+
+```{r}
+a=xy_reg3(m1,list(m2),list(m5))
+round(as.matrix(a),5)
+```
 
 
+So here I create a new function (only to make a prettier report), xy_reg4:
+(I should copy the 'mnv' summary as Christine said)
 
+```{r}
+xy_reg4 = function(Y, X, Z){
+  print("                     Results of the YX-Regression                     ")
+  print("======================================================================")
+  a=Sys.time()
+  print(paste("                                                   ", a, sep=""))
+  result = xy_reg3(Y, X, Z)
+  print("                                                                      ")
+  print(round(as.matrix(result),5))
+  n = dim(Y)[1]
+  print("______________________________________________________________________")
 
+  summary = data.frame(c(n,133.2,TRUE,991))
+  rownames(summary)= c("N obs", "F-statistic", "Comp?", "R2")
+  colnames(summary)= c("Summary")
+  print(as.matrix(summary))
+}
+```
 
+```{r}
+xy_reg4(m1,list(m2),list(m5))
+```
 
 
 
