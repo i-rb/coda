@@ -116,8 +116,8 @@ In order to obtain the estimator of the variance matrix of the parameters, first
 $\hat{\Sigma}=\dfrac{Y'(I-X(X'X)^{-1}X')Y}{n}=\dfrac{(Y-X\hat{B})'(Y-X\hat{B})}{n}$
 
 ```{r}
-est_var = function(X,Y){ # page 146 kevin
-  B=mlm(X,Y)
+est_var = function(X,Y,B){ # page 146 kevin
+  if (missing(B)){B=mlm(Y,X)}
   n=dim(Y)[1]
   sig = (1/n)*t(Y-X%*%B)%*%(Y-X%*%B)
   return(sig)
@@ -129,8 +129,8 @@ Now we can use the $\mathrm{cov}(\hat{\beta})$ estimator from the Kevin book:
 ```{r}
 # p 145 Kevin (5.13)
 
-b_cov = function(X,Y){
-  sig = est_var(X,Y)
+b_cov = function(X,Y,B){
+  sig = est_var(X,Y,B)
   cov = kronecker(sig,solve(t(X)%*%X))
   return(round(cov,5))
 }
@@ -149,7 +149,9 @@ Recall that the regression in the ILR coordinate space is defined by:
 $\mathrm{ilr}(\mathbf{Y}_i) = \mathbf{b}_0^*+ \sum_{q=1}^Q\mathrm{ilr}(\mathbf{X}_{qi})\mathbf{B}^*_q + \sum_{k=1}^K Z_{ki} \mathbf{b}^*_k + \mathrm{ilr}(\epsilon_i)$
 
 
-```{r}
+```{r} 
+# eq 4 ASJ paper (Ngyugen, Laurent, Thomas-Agnan, Ruiz-Gazen)
+
 xy_reg = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...)
    print("XY REGRESSION")
    print("===========================")
@@ -213,9 +215,9 @@ xy_reg = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE){ 
 
 
 ```{r}
-m1 = rbind(c(0.25,0.75),c(0.5,0.5),c(0.9,0.1),c(0.33,0.64)) # 2 parts, n=4
-m2 = rbind(c(0.1,0.4,0.5),c(0.3,0.3,0.4),c(0.9,0.05,0.05),c(0.1,0.7,0.2)) # 2 parts, n=4
-m3 = matrix(c(23,1,32,12)) # 2 parts, n=4
+m1 = rbind(c(0.25,0.75),c(0.5,0.5),c(0.9,0.1),c(0.33,0.64),c(0.2,0.8),c(0.91,0.09)) # 2 parts, n=4
+m2 = rbind(c(0.1,0.4,0.5),c(0.3,0.3,0.4),c(0.9,0.05,0.05),c(0.1,0.7,0.2),c(0.8,0.1,0.1),c(0.35,0.25,0.4)) # 2 parts, n=4
+m3 = matrix(c(23,1,32,12,9,11)) # 2 parts, n=4
 ```
 
 xy_reg works quite well. To do:
@@ -223,6 +225,7 @@ xy_reg works quite well. To do:
 - be sure that it works with different lenghts of the lists of inputs (specially when there is no Z and things like that). We can assume that at least Y and X should be passed (as it is a xy compositional reg).
 
 - add covariance and those things of the mvn package. (copy its report, but no testing)
+
 
 ```{r}
 xy_reg(Y = m1, X = list(m2), Z = list(m3), c=TRUE)
@@ -293,15 +296,161 @@ y_reg(Y=m1, Z=list(m3), c=TRUE)
 reg(Y=..., X=..., Z=,..., Ycomp=TRUE/FALSE, c=TRUE/FALSE) # where Ycomp indicates whether Y should be understood or not as a compositional variable.
 ```
 
-### Adding variance of the parameters
+### Adding variance of the parameters (xyreg2)
 
 
+```{r} 
+# eq 4 ASJ paper (Ngyugen, Laurent, Thomas-Agnan, Ruiz-Gazen)
+
+xy_reg2 = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...)
+   print("XY REGRESSION")
+   print("===========================")
+   if (is.na(V[[1]][1,1])){
+    V=list(V_D(dim(Y)[2])) # can I upgrade this with that thing of Thibault? numeric(n) better than numeric()?
+    # this the 'standard' contrast matrix for Y
+    for (i in 1:length(X)){ # here 'standard' contrast matrices for X are added
+      V=c(V,list(V_D(dim(X[i][[1]])[2]))) 
+    }
+  }
+  # here I transform the Y and X to the space of coordinates
+  ty = ilr(Y, V[[1]])
+  dimD=dim(Y)[2]
+  tx = matrix(numeric(dim(X[[1]])[1]*(dimD-1)),dim(X[[1]])[1])+1 # here it is created a matrix which is a vector of ones (should be removed afterwords if c=False)
+  for (i in 1:length(X)){
+    tx = cbind(tx,ilr(X[[i]],V[[i+1]])) # the transformed X is created as a unique matrix
+  }
+  if(c==FALSE){
+    tx=tx[,dimD:dim(tx)[2]]
+    } # should remove the vector of zeros
+  # adding constant Z to the independant variables in the coordinate space
+  if (!is.na(Z[[1]][1,1])){
+    for (z in Z){
+      tx=cbind(tx,z)
+    }
+  }
+  Bstar = mlm(ty,tx)
+  covb = b_cov(tx,ty,Bstar)
+  print("B* in the coordinates space:")
+  print(Bstar)
+  print("---------------------------")
+  h=1
+  if (c==TRUE){
+    b0=inverseilr(Bstar[h:(dimD-1),],V[[1]])
+    print("b0 in the simplex:")
+    print(b0)
+  }
+  h=dimD
+  if (c==FALSE){
+    h=1
+  }
+  print("---------------------------")
+  print("Variance matrix of the parameters:")
+  print(covb)
+  print("===========================")
+  for (i in 1:length(X)){
+    print(paste("B (in the simplex) for the comp. variable, X", i, sep=""))
+    dimx = dim(X[[i]])[2] #number of parts of this variable i of X D parts --> D-1 param in B*
+    matrix_x = Bstar[h:(h+dimx-2),]
+    B_q = V[[1]]%*%matrix_x%*%t(V[[i+1]])
+    h=h+dimx-1
+    print(B_q)
+  }
+  print("---------------------------")
+  for (i in 1:length(Z)){
+    print(paste("B (in the simplex) for the non-comp. variable, Z", i, sep=""))
+    dimz = dim(Z[[i]])[2]
+    matrix_z = Bstar[h:(h+dimz-1),] # it is non comp, it does not lose a dimension in the transformation
+    h=h+dimz-1
+    c_k = inverseilr(matrix_z, V[[1]])
+    print(c_k)
+  }
+}
+```
+
+
+```{r}
+xy_reg2(Y = m1, X = list(m2), Z = list(m3), c=TRUE)
+```
+
+I guess this is more or less all the info we would like to present, but with a different format.
 
 
 
 ## Copying the (format of) mvn package. It is not, mvn is it?
 
-Two ways of output: independent or dependent variable.
+Two ways of output: ilr (default) or simplex spaces. I'll construct -by the moment- the former (xy_reg3). This is the 
+
+
+```{r} 
+# eq 4 ASJ paper (Ngyugen, Laurent, Thomas-Agnan, Ruiz-Gazen)
+
+xy_reg3 = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...)
+   print("XY REGRESSION")
+   print("===========================")
+   if (is.na(V[[1]][1,1])){
+    V=list(V_D(dim(Y)[2])) # can I upgrade this with that thing of Thibault? numeric(n) better than numeric()?
+    # this the 'standard' contrast matrix for Y
+    for (i in 1:length(X)){ # here 'standard' contrast matrices for X are added
+      V=c(V,list(V_D(dim(X[i][[1]])[2]))) 
+    }
+  }
+  # here I transform the Y and X to the space of coordinates
+  ty = ilr(Y, V[[1]])
+  dimD=dim(Y)[2]
+  tx = matrix(numeric(dim(X[[1]])[1]*(dimD-1)),dim(X[[1]])[1])+1 # here it is created a matrix which is a vector of ones (should be removed afterwords if c=False)
+  for (i in 1:length(X)){
+    tx = cbind(tx,ilr(X[[i]],V[[i+1]])) # the transformed X is created as a unique matrix
+  }
+  if(c==FALSE){
+    tx=tx[,dimD:dim(tx)[2]]
+    } # should remove the vector of zeros
+  # adding constant Z to the independant variables in the coordinate space
+  if (!is.na(Z[[1]][1,1])){
+    for (z in Z){
+      tx=cbind(tx,z)
+    }
+  }
+  Bstar = mlm(ty,tx)
+  covb = b_cov(tx,ty,Bstar)
+  print("B* in the coordinates space:")
+  print(Bstar)
+  print("---------------------------")
+  h=1
+  if (c==TRUE){
+    b0=inverseilr(Bstar[h:(dimD-1),],V[[1]])
+    print("b0 in the simplex:")
+    print(b0)
+  }
+  h=dimD
+  if (c==FALSE){
+    h=1
+  }
+  print("---------------------------")
+  print("Variance matrix of the parameters:")
+  print(covb)
+  print("===========================")
+  for (i in 1:length(X)){
+    print(paste("B (in the simplex) for the comp. variable, X", i, sep=""))
+    dimx = dim(X[[i]])[2] #number of parts of this variable i of X D parts --> D-1 param in B*
+    matrix_x = Bstar[h:(h+dimx-2),]
+    B_q = V[[1]]%*%matrix_x%*%t(V[[i+1]])
+    h=h+dimx-1
+    print(B_q)
+  }
+  print("---------------------------")
+  for (i in 1:length(Z)){
+    print(paste("B (in the simplex) for the non-comp. variable, Z", i, sep=""))
+    dimz = dim(Z[[i]])[2]
+    matrix_z = Bstar[h:(h+dimz-1),] # it is non comp, it does not lose a dimension in the transformation
+    h=h+dimz-1
+    c_k = inverseilr(matrix_z, V[[1]])
+    print(c_k)
+  }
+}
+```
+
+
+
 
 
 
