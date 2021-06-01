@@ -209,10 +209,17 @@ xy_reg = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE){ 
 }
 ```
 
+```{r}
+m1
+```
+
+```{r}
+xy_reg4(Y=m1, X=list(m2), Z=list(m5))
+```
 
 
 ```{r}
-ss = xy_reg(Y = m1, X = list(m2,m4), Z=list(m5), c=TRUE)
+ss = xy_reg(Y = m1, X = list(m2), Z=list(m5), c=TRUE)
 ```
 WHEN I ADD m3 to Z I always get a singular matrix in X'X how is this possible?
 
@@ -485,7 +492,17 @@ xy_reg3 = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE){
 }
 ```
 
+```{r}
+inverseilr(m1)
+```
+
+
 The original output is a DataFrame (I don't like it):
+
+```{r}
+m5
+```
+
 
 ```{r}
 xy_reg3(m1,list(m2),list(m5))
@@ -529,3 +546,247 @@ xy_reg4(m1,list(m2),list(m5))
 
 
 # Functions on Impacts
+
+First, I will try to compute the YX-compositional model elasticities (without total), which can be computed as (Morais, Thomas-Agnan, 2021):
+
+$\dfrac{\partial \log \mathbb{E}^\oplus Y}{\partial\log\check{X}}=W_{\mathbb{E}^\oplus Y}B$
+
+with $W_z = I_D - 1_Dz'$ and $z$ a compositional variable.
+
+I have translated the code from Shuyao Li to this enviroment, but the approaches differ.
+
+First, I need to modify our function to return B (instead of B*) to use it here directly:
+
+```{r}
+# modification of reg_xy() v.1.0.0
+# version 1.0.0
+
+B_reg = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE){ 
+   if (is.na(V[[1]][1,1])){
+    V=list(V_D(dim(Y)[2])) # this the 'standard' contrast matrix for Y
+    for (i in 1:length(X)){ # here 'standard' contrast matrices for X are added
+      V=c(V,list(V_D(dim(X[i][[1]])[2]))) 
+    }
+  }
+  # here I transform the Y and X to the space of coordinates
+  ty = ilr(Y, V[[1]])
+  dimD=dim(Y)[2]
+  tx = matrix(numeric(dim(X[[1]])[1]))+1 # here it is created a matrix which is a vector of ones (should be removed afterwords if c=False)
+  for (i in 1:length(X)){
+    tx = cbind(tx,ilr(X[[i]],V[[i+1]])) # the transformed X is created as a unique matrix
+  }
+  if(c==FALSE){
+    tx=tx[,-1]
+    } # should remove the vector of zeros
+  # adding constant Z to the independant variables in the coordinate space
+  if (!is.na(Z[[1]][1,1])){
+    for (z in Z){
+      tx=cbind(tx,z)
+    }
+  }
+  #return(list(tx,ty))
+  Bstar = mlm(ty,tx)
+  
+  res_mat = t(matrix(numeric(dim(Y)[2])))
+  
+  if (c==TRUE){
+    b0=inverseilr(t(Bstar[1,]),V[[1]])
+    res_mat = rbind(res_mat,b0)
+  }
+  h=2
+  for (i in 1:length(X)){
+    dimx = dim(X[[i]])[2] #number of parts of this variable i of X D parts --> D-1 param in B*
+    if (h==(h+dimx-2)){matrix_x = t(matrix(Bstar[h,]))}
+    if (h!=(h+dimx-2)){matrix_x = Bstar[h:(h+dimx-2),] }
+    B_q = V[[1]]%*%t(matrix_x)%*%t(V[[i+1]])
+    h=h+dimx-1
+    res_mat = rbind(res_mat, t(B_q))
+  }
+  for (i in 1:length(Z)){
+    dimz = dim(Z[[i]])[2]
+    if (h==(h+dimz-1)){matrix_z = t(matrix(Bstar[h,]))}
+    if (h!=(h+dimz-1)){matrix_z = Bstar[h:(h+dimz-1),]} # it is non comp, it does not lose a dimension in the transformation
+    h=h+dimz-1
+    c_k = inverseilr(matrix_z, V[[1]])
+    res_mat = rbind(res_mat, c_k)
+  }
+  return(res_mat[-1,])
+}
+```
+
+
+```{r}
+xy_elas = function(Y, B, i){ # Y matrix in the simplex, i index of the X comp variable, B is given in the simplex form we got previously
+  TT= nrow(Y) # number of observations
+  D = ncol(Y)
+  e = matrix(rep(1,D*TT), ncol=D, nrow=TT)
+  Bi = B[i,]
+  for (t in (1:TT)){
+    W = matrix(rep(Y[t, ], times  = D), nrow = D, ncol = D, byrow = TRUE)
+    W =  diag(D) - W
+    e[t,] <- t(W%*%Bi)
+  }
+  return(e)
+}
+```
+
+I test it...
+
+```{r}
+testB = B_reg(m1,list(m2),list(m5))
+xy_elas(m1,testB,2)
+```
+
+
+Below is the well constructed functions (one from B and one from data), but which is the output we want? Here -in general- makes no sense to plot the time series plot that I usually see. Maybe an scatter plot linking impact and state (value of x)? an histogram?...
+
+
+
+
+```{r}
+
+xy_imp_data = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE, ts=FALSE, h=FALSE, show=TRUE, name="output_impacts.pdf"){
+  B = B_reg(Y, X, Z, V, c)
+  if (show==TRUE){
+    print("              XY IMPACTS                 ")
+    print("=========================================")
+    print("B in the simplex: ")
+    print(B)
+    print("=========================================")
+  }
+  if ((ts+h)>0){
+    pdf(name)
+    plot.new()
+    txt=("Graphics of XY Impacts")
+    text(.5, .5, txt, font=2, cex=1.5)
+    txt=("Includes:")
+    text(.1, .3, txt, font=2, cex=1)
+    ypos=.2
+    if (ts==1){
+      txt="Time Series Plot"
+      text(.2, ypos, txt, font=2, cex=1)
+      ypos=ypos-0.1
+    }
+    if (h==1){
+      txt="Histograms"
+      text(.2, ypos, txt, font=2, cex=1)
+      ypos=ypos-0.1
+    }
+  }
+  
+  init = c
+  for (i in 1:length(X)){
+    for (k in 1:(dim(X[[i]])[2])){
+      elas = xy_elas(Y,B,c+1)
+      if (show==TRUE){
+        print(paste("Impact of the variable X_",i,"_",k, sep=""))
+        print(elas)
+        print("                                         ")
+      }
+      
+      if (ts == TRUE){
+        dim_y = dim(Y)[2]
+        ramp = colorRamp(c("Red","Green","Blue","Pink"))
+        colors = rgb(ramp(seq(0,1,length=dim_y)),max=255)
+        plot(elas[,1],type="l",col=colors[1],ylim=c(min(elas),max(elas)),main=paste("TS plot of elasticities of ","X_",i,"_",k,sep=""))
+        legleg = c(paste("X_",i,"_",k,"_1",sep=""))
+        legcol = c(colors[1])
+        if (dim_y!=1){
+          for (n in (2:dim_y)){
+          lines(elas[,n],col=colors[n])
+          legleg = c(legleg, paste("X_",i,"_",k,"_",n,sep=""))
+          legcol = c(legcol, colors[n])
+          }
+        }
+        legend("topright",legend=legleg,col=legcol,lty=1, cex=0.8)
+        
+      }
+      
+      if (h==TRUE){
+        dim_y = dim(Y)[2]
+        hist(elas[,1], xlab = "Elasticity", main=paste("Histogram of elasticities of ","X_",i,"_",k,"_",1,sep=""))
+
+         if (dim_y!=1){
+           for (n in (2:dim_y)){
+             hist(elas[,n], xlab = "Elasticity", main=paste("Histogram of elasticities of ","X_",i,"_",k,"_",n,sep=""))
+           }
+         }
+      }
+      c=c+1
+      }
+  }
+  if (show==TRUE){print("-----------------------------------------")}
+  for (j in length(Z)){
+    for (k in 1:(dim(Z[[j]])[2])){
+      elas = xy_elas(Y,B,c+1)
+      if (show==TRUE){print(paste("Impact of the variable Z_",j,"_",k, sep=""))
+          print(elas)
+          print("                                         ")}
+      
+      
+      if (ts == TRUE){
+        dim_y = dim(Y)[2]
+        ramp = colorRamp(c("Red","Green","Blue","Pink"))
+        colors = rgb(ramp(seq(0,1,length=dim_y)),max=255)
+        plot(elas[,1],type="l",col=colors[1],ylim=c(min(elas),max(elas)),main=paste("TS plot of elasticities of ","Z_",j,"_",k,sep=""))
+        legleg = c(paste("Z_",j,"_",k,"_1",sep=""))
+        legcol = c(colors[1])
+        if (dim_y!=1){
+          for (n in (2:dim_y)){
+          lines(elas[,n],col=colors[n])
+          legleg = c(legleg, paste("Z_",j,"_",k,"_",n,sep=""))
+          legcol = c(legcol, colors[n])
+          }
+        }
+        legend("topright",legend=legleg,col=legcol,lty=1, cex=0.8)
+      }
+      
+      
+      
+      
+      if (h==TRUE){
+        dim_y = dim(Y)[2]
+        hist(elas[,1], xlab = "Elasticity", main=paste("Histogram of elasticities of ","Z_",j,"_",k,"_",1,sep=""))
+        if (dim_y!=1){
+          for (n in (2:dim_y)){
+            hist(elas[,n], xlab = "Elasticity", main=paste("Histogram of elasticities of ","Z_",i,"_",k,"_",n,sep=""))
+           }
+         }
+      }
+      c=c+1
+    }
+  }
+  if ((ts+h)>0){
+    dev.off()
+  }
+}
+```
+
+
+
+```{r}
+xy_imp_data(m1,list(m2),list(m5),h=TRUE,ts=TRUE)
+```
+
+
+
+
+```{} 
+# Shuyao code (it does not work as such)
+
+fun.elast_YXcompo <- function(S,B_star,i,D=ncol(S)){   
+  S <- as.matrix(S)
+  T <- nrow(S)
+  B_intermediate <- compositions::ilrInv(B_star)
+  B <- as.matrix(compositions::ilrInv(t(B_intermediate),orig = compX))
+  B<- B[,i]
+  e <- matrix(rep(1,D*T), ncol=D, nrow=T)
+  colnames(e) <- colnames(S)
+  for (t in 1:T){
+    W = matrix(rep(S[t, ], times  = D), nrow = D, ncol = D, byrow = TRUE)
+    W =  diag(D) - W
+    e[t,] <- t(W %*% B)
+  } 
+  return(e)
+}
+```
