@@ -97,7 +97,7 @@ $\hat{B} = (X^TX)^{-1}X^TY$
 ```{r}
 mlm = function(Y,X){ # only the dependent and independent matrices are needed
   ## use solve(t(X),Y) or QR algorithm qr.solve(), cholesky (I HAVE USED QR)
-  B = qr.solve(t(X)%*%X,t(X)%*%Y)
+  B = solve(crossprod(X),crossprod(X,Y),tol=1e-21)
   return(round(B,8))
 }
 ```
@@ -150,13 +150,13 @@ $\mathrm{ilr}(\mathbf{Y}_i) = \mathbf{b}_0^*+ \sum_{q=1}^Q\mathrm{ilr}(\mathbf{X
 
 # VERSION 1.0.0
 
-xy_reg = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...)
+xy_reg = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...)x
    print("XY REGRESSION")
    print("===========================")
    if (is.na(V[[1]][1,1])){
     V=list(V_D(dim(Y)[2])) # this the 'standard' contrast matrix for Y
     for (i in 1:length(X)){ # here 'standard' contrast matrices for X are added
-      V=c(V,list(V_D(dim(X[i][[1]])[2]))) 
+      V=c(V,list(V_D(dim(X[[i]])[2]))) 
     }
   }
   # here I transform the Y and X to the space of coordinates
@@ -209,18 +209,8 @@ xy_reg = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE){ 
 }
 ```
 
-```{r}
-m1
-```
-
-```{r}
-xy_reg4(Y=m1, X=list(m2), Z=list(m5))
-```
 
 
-```{r}
-ss = xy_reg(Y = m1, X = list(m2), Z=list(m5), c=TRUE)
-```
 WHEN I ADD m3 to Z I always get a singular matrix in X'X how is this possible?
 
 ```{r}
@@ -231,74 +221,76 @@ m4 = rbind(c(0.2,0.8),c(0.3,0.7),c(0.9,0.1),c(0.75,0.25),c(0.3,0.7),c(0.15,0.85)
 m5 = rbind(c(3,-4.3),c(0,-2),c(4,5),c(-2,3), c(4,2), c(1,11), c(23,2))
 ```
 
+```{r}
+ilr(m2)
+```
+
+```{r}
+cor(cbind(ilr(m2),ilr(m4),m3,m5))
+```
+
+
+```{r}
+ilr(m4)
+```
+
+
+```{r}
+xy_reg(Y = m1, X = list(m2,m4), Z=list(m5), c=TRUE)
+```
+
+AND
+
+```{r}
+xy_reg(Y = m1, X = list(m2), Z=list(m5,m3), c=TRUE)
+```
+
+BUT 
+
+```{r}
+m2
+```
+
+```{r}
+m4
+```
+
+```{r}
+m4
+```
+
+
+```{r}
+xy_reg(Y = m1, X = list(m2,m4), Z=list(m5,m3), c=TRUE)
+```
+
+
+```{r}
+tx
+```
+
+```{r}
+t(tx)%*%tx
+```
+
+```{r}
+det(t(tx)%*%tx)
+```
+
+
+THIS HAPPENS WITH "ANY" m4 matrix.
+
+
 xy_reg works quite well. To do:
 
 - be sure that it works with different lenghts of the lists of inputs (specially when there is no Z and things like that). We can assume that at least Y and X should be passed (as it is a xy compositional reg).
 
-- add covariance and those things of the mvn package. (copy its report, but no testing)
+- add covariance and those things of the mvn package. (copy its report, but no testing). 
 
 
+### x reg and y reg
 
-
-### y reg
-
-```{r}
-y_reg = function(Y,Z=list(matrix()),V=list(matrix()),c=TRUE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices (only one matrix). order: (Y)
-  print("Y REGRESSION")
-  print("===========================")
-   if (is.na(V[[1]][1,1])){
-    V=list(V_D(dim(Y)[2])) 
-    # this the 'standard' contrast matrix for Y
-    }
-  # here I transform the Y to the space of coordinates
-  ty = ilr(Y, V[[1]])
-  dimD=dim(Y)[2]
-  tx = matrix(numeric(dim(Z[[1]])[1]*(dimD-1)),dim(Z[[1]])[1])+1 # here it is created a matrix which is a vector of ones (should be removed afterwords if c=False)
-  if(c==FALSE){
-    tx=tx[,dimD:dim(tx)[2]]
-    } # should remove the vector of zeros
-  # adding constant Z to the independant variables in the coordinate space
-  if (!is.na(Z[[1]][1,1])){
-    for (z in Z){
-      tx=cbind(tx,z)
-    }
-  }
-  Bstar = mlm(ty,tx)
-  print("B* in the coordinates space:")
-  print(Bstar)
-  print("---------------------------")
-  h=1
-  if (c==TRUE){
-    b0=inverseilr(Bstar[h:(dimD-1),],V[[1]])
-    print("b0 in the simplex:")
-    print(b0)
-  }
-  h=dimD
-  if (c==FALSE){
-    h=1
-  }
-  print("---------------------------")
-  for (i in 1:length(Z)){
-    print(paste("B (in the simplex) for the non-comp. variable, Z", i, sep=""))
-    dimz = dim(Z[[i]])[2]
-    matrix_z = Bstar[h:(h+dimz-1),] # it is non comp, it does not lose a dimension in the transformation
-    h=h+dimz-1
-    c_k = inverseilr(matrix_z, V[[1]])
-    print(c_k)
-  }
-}
-
-```
-
-I feel that this would works if xy_reg works. It is only a particular case of the xy reg. (IT DOES NOT WORK WELL)
-
-```{r}
-y_reg(Y=m1, Z=list(m3), c=TRUE)
-```
-
-### x reg
-
-**To be done**. If the xy-reg is perfectly done, it would be easier to particularize to x_reg. Moreover, may we have only one function for the regression? Something like: 
+**To be done**. If the xy-reg is perfectly done, it would be easier to particularize to x_reg, y_reg. Moreover, may we have only one function for the regression? Something like: 
 
 ```
 reg(Y=..., X=..., Z=,..., Ycomp=TRUE/FALSE, c=TRUE/FALSE) # where Ycomp indicates whether Y should be understood or not as a compositional variable.
@@ -384,7 +376,7 @@ xy_reg2(Y = m1, X = list(m2), Z = list(m5), c=TRUE)
 I guess this is more or less all the info we would like to present, but with a different format.
 
 
-## Copying the (format of) mvn package. It is not, mvn is it?
+## Copying the (format of) mvn package. It is not 'mvn', is it?
 
 Two ways of output: ilr (default) or simplex spaces. I'll construct -by the moment- the former (xy_reg3). This is the format I would like to replicate: 
 
@@ -492,16 +484,8 @@ xy_reg3 = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE){
 }
 ```
 
-```{r}
-inverseilr(m1)
-```
-
 
 The original output is a DataFrame (I don't like it):
-
-```{r}
-m5
-```
 
 
 ```{r}
@@ -512,7 +496,7 @@ xy_reg3(m1,list(m2),list(m5))
 I prefer the plain text matrix:
 
 ```{r}
-a=xy_reg3(m1,list(m2),list(m5))
+a=xy_reg3(m1,list(m2),list(m5)) # simplex_result=TRUE (no sd for the simplex)
 round(as.matrix(a),5)
 ```
 
@@ -644,7 +628,6 @@ Below is the well constructed functions (one from B and one from data), but whic
 
 
 ```{r}
-
 xy_imp_data = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TRUE, ts=FALSE, h=FALSE, show=TRUE, name="output_impacts.pdf"){
   B = B_reg(Y, X, Z, V, c)
   if (show==TRUE){
@@ -741,7 +724,7 @@ xy_imp_data = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TR
         legend("topright",legend=legleg,col=legcol,lty=1, cex=0.8)
       }
       
-      
+  
       
       
       if (h==TRUE){
@@ -760,6 +743,19 @@ xy_imp_data = function(Y,X=list(matrix()),Z=list(matrix()),V=list(matrix()),c=TR
     dev.off()
   }
 }
+```
+
+
+```{r}
+# how to define attributes
+a <- matrix(0,3,3)
+attr(a, "type") <- "simplex"
+attr(a, "V") <- m1
+a
+```
+
+```{r}
+attr(a, "type") == "simplex"
 ```
 
 

@@ -1,0 +1,16 @@
+---
+title: "Package Functions througth 'attributes' (Week 4)"
+output:
+  html_notebook:
+    toc: yes
+  html_document:
+    df_print: paged
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+
+In this notebook I'll try to code the functions that will be implemented in the package. Up to here, it has been decided that it would be useful to add some attributes to matrices (which are the basic data structure we are manipulating) somehow simulating the behaviour of classes in R. These attributes will indicate what represent each matrix and in which space (for example, a given matrix $B$ could be the parameter estimation matrix in the coordinates and therefore we need to specify which base is used, i.e. in which particular coordinate space it lies). 
+
+This notebook continues the previous "functions_nb.Rmd" one and inherites its functions, while updating them to the new framework.
+
