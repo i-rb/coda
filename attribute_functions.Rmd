@@ -12,5 +12,543 @@ output:
 
 In this notebook I'll try to code the functions that will be implemented in the package. Up to here, it has been decided that it would be useful to add some attributes to matrices (which are the basic data structure we are manipulating) somehow simulating the behaviour of classes in R. These attributes will indicate what represent each matrix and in which space (for example, a given matrix $B$ could be the parameter estimation matrix in the coordinates and therefore we need to specify which base is used, i.e. in which particular coordinate space it lies). 
 
-This notebook continues the previous "functions_nb.Rmd" one and inherites its functions, while updating them to the new framework.
+The attributes that has matrices are "space" (ilr or simplex, possibly alr) and "base" (base matrix).
+
+This notebook continues the previous "functions_nb.Rmd" one and inherits its functions, while updating them to the new framework.
+
+### Matrices for the examples
+
+I create a function to recover easily the original 5 matrices that will be used in the examples, as they may be manipulated.
+
+```{r}
+example_matrices = function(){
+m1 = rbind(c(0.25,0.3,0.2),c(0.5,0.2,0.3),c(0.9,0.05,0.05),c(0.33,0.4,0.24),c(0.2,0.3,0.5),c(0.91,0.05,0.04),c(0.1,0.7,0.2)) 
+m2 = rbind(c(0.1,0.4,0.25,0.25),c(0.3,0.3,0.3,0.1),c(0.9,0.05,0.02,0.03),c(0.1,0.7,0.15,0.05),c(0.8,0.1,0.05,0.05),c(0.35,0.25,0.3,0.1),c(0.4,0.1,0.1,0.4)) 
+m3 = matrix(c(23,1,32,12,9,11,3)) 
+m4 = rbind(c(0.2,0.8),c(0.3,0.7),c(0.9,0.1),c(0.75,0.25),c(0.3,0.7),c(0.15,0.85),c(0.9,0.1))
+m5 = rbind(c(3,-4.3),c(0,-2),c(4,5),c(-2,3), c(4,2), c(1,11), c(23,2))
+return(list(m1,m2,m3,m4,m5))}
+```
+
+```{r}
+m1 = example_matrices()[[1]]
+m2 = example_matrices()[[2]]
+m3 = example_matrices()[[3]]
+m4 = example_matrices()[[4]]
+m5 = example_matrices()[[5]]
+```
+
+
+# Preliminary Functions
+
+## Closure operator
+
+```{r}
+C=function(x, k){ # x the NxD matrix, k the constant (k=1 if missing)
+  if (missing(k)){
+    newx <- (x)/rowSums(x)
+    return(newx)
+  }
+  else{
+    newx <- (k*x)/rowSums(x)
+    return(newx)
+  }
+} 
+```
+
+# Transformation functions (ilr, inverseolr,...)
+
+## Function that creates the Helmert Matrix
+
+If $V$ (contrast matrix) is not passed, computations are done with the Helmert Matrix as default.
+
+```{r} 
+# Creates de Helmert Matrix given the number of parts of the variable
+V_D = function(D){ # D is the dimension (parts)
+  V_D = matrix(0L, nrow =D , ncol = D-1)
+  for (i in 1:(D-1)){  # pseudodiagonal elements
+    V_D[i,i] = (D-i)/(sqrt((D-i+1)*(D-i)))
+  }
+  for (i in 2:D){ # below pseudodiagonal elements
+    for (j in 1:i-1){
+      V_D[i,j]=-1/(sqrt((D-j+1)*(D-j)))
+    }
+  } 
+  return(V_D)
+}
+```
+
+```{r}
+a <- matrix(0,3,3)
+attr(a, "space") <- "simplex"
+attr(a, "V") <- m1
+a
+```
+```{r}
+attr(a, "space")
+```
+
+
+## ILR transformation
+
+Given a matrix NxD and a V contrast matrix, the function returns the ilr-transformed coordinates in a matrix. 
+
+If the matrix has "ilr" attribute, it is raised an error: "already in coordinates space".
+If the matrix has "simplex" attribute or has no attribute, it is given two attributes: "ilr" (that substitutes "simplex", if it is the case) and the V base matrix used.
+
+```{r}
+ilr = function(x, V){ # x matrix N x D
+  if (is.null(attr(x, "space"))){attr(x, "space") <- "simplex"}
+  if (attr(x, "space")=="ilr"){stop("The matrix is already in ILR coordinates.")}
+  if (missing(V)){V=V_D(dim(x)[2])}
+  x = C(x)
+  ilr_mat = t(t(V)%*%t(log(x)))
+  attr(ilr_mat, "space") <- "ilr"
+  attr(ilr_mat, "base") <- V
+  return(ilr_mat)
+}
+```
+
+Examples:
+
+```{r}
+ilr(m1)
+```
+
+However, if it is tried to pass a ilr-matrix as an input (is this correct in English?):
+
+```{r}
+attr(m1, "space") = "ilr"
+ilr(m1)
+```
+
+
+
+## Inverse of the Ilr
+
+This is the contrary case. If given a matrix with a "simplex" attribute, it would raise an error. If $V$ base is specified, that matrix is used. If not, it is preferred the base matrix that is given as an attribute of the matrix to transform. If none of them exist, the Helbert matrix is used.
+
+```{r}
+inverseilr=function(x,V){
+  if (is.null(attr(x, "space"))){attr(x, "space") <- "ilr"}
+  if (attr(x, "space")=="simplex"){stop("The matrix is already in the simplex space.")}
+  x = t(x)
+  if (missing(V)){
+    if (is.null(attr(x,"base"))){
+      V=V_D(dim(x)[1]+1)
+    }
+    else{V = attr(x,"base")}
+  }
+  inv_mat = C(t(exp(V%*%x)))
+  attr(inv_mat,"space") = "simplex"
+  attr(inv_mat,"base") = V
+  return(inv_mat)
+}
+```
+
+An example:
+
+```{r}
+ilrm2 = ilr(m2) 
+ilrm2
+```
+
+```{r}
+inverseilr(ilrm2)
+```
+
+However, if we try to input a matrix in the simplex space...
+
+```{r}
+m2_2 = inverseilr(ilrm2)
+inverseilr(m2_2)
+```
+
+
+# Functions for the Regression 
+
+## Estimation of the coefficients (Same than before, no compositional aspects involved here)
+
+Given the model: $\begin{pmatrix} y_1\\ y_2\\ ...\\ y_{p}\end{pmatrix} = D\begin{pmatrix}\beta_1\\\beta_2\\...\\ \beta_{p}\end{pmatrix} + \begin{pmatrix}u_1\\u_2\\...\\ u_{p} \end{pmatrix}$
+
+The BLUE estimator of $B$ is obtained computing: 
+
+$\hat{B} = (X^TX)^{-1}X^TY$
+
+```{r}
+mlm = function(Y,X){ # only the dependent and independent matrices are needed
+  ## use solve(t(X),Y) or QR algorithm qr.solve(), cholesky (I HAVE USED QR)
+  B = solve(crossprod(X),crossprod(X,Y),tol=1e-21)
+  return(round(B,8))
+}
+```
+
+## Estimation of the variance (Same than before, no compositional aspects involved here)
+
+### Function 20. Variance-covariance matrices. 
+
+In order to obtain the estimator of the variance matrix of the parameters, first it is needed to estimate the common covariance structure $\Sigma$. Recall that $\mathrm{cov}(Y)=I_n\otimes \Sigma$. Then: 
+
+$\hat{\Sigma}=\dfrac{Y'(I-X(X'X)^{-1}X')Y}{n}=\dfrac{(Y-X\hat{B})'(Y-X\hat{B})}{n}$
+
+```{r}
+est_var = function(X,Y,B){ # page 146 kevin
+  if (missing(B)){B=mlm(Y,X)}
+  n=dim(Y)[1]
+  sig = (1/n)*t(Y-X%*%B)%*%(Y-X%*%B)
+  return(sig)
+}
+```
+
+Now we can use the $\mathrm{cov}(\hat{\beta})$ estimator from the Kevin book:
+
+```{r}
+# p 145 Kevin (5.13)
+
+b_cov = function(X,Y,B){
+  sig = est_var(X,Y,B)
+  cov = kronecker(sig,solve(t(X)%*%X))
+  return(round(cov,5))
+}
+
+```
+
+## Compositional Regressions 
+
+### xy reg (coefficients est.)
+
+Recall that the regression in the ILR coordinate space is defined by:
+
+$\mathrm{ilr}(\mathbf{Y}_i) = \mathbf{b}_0^*+ \sum_{q=1}^Q\mathrm{ilr}(\mathbf{X}_{qi})\mathbf{B}^*_q + \sum_{k=1}^K Z_{ki} \mathbf{b}^*_k + \mathrm{ilr}(\epsilon_i)$.
+
+This function:
+  - Can take Y in the ilr (then no first transfomration is carried out) or the simplex space (by default, if attribute indicated).
+  - Can take any X in the ilr (then no first transformation is carried out) or the simplex space (by default, if not attributed indicated).
+  - To be precise: can take some X variables in the ilr space and some in the simplex.
+  - Take Z in the ilr space (**is it possible to take it in the simplex?**).
+  - Return (optional) a named list, such that the user can easily write results\$bstar and recover specifically the ilr matrix of coefficients $B^*$.
+  - Print (optional) the results.
+  
+  - As previously, if a list of base matrices V is indicated it is used (if Y,X in the simplex, raise an error if not -- this could be done, but it is a headache and I believe the use is limited). If not, it is used those indicated as an attribute (if ilr matrices are passed) and completed with the Helmert matrices.
+
+Therefore, this first function takes every variable that is needed to carry out the regression and returns those variables in the ilr space with the base matrices already in their attributes.
+
+```{r}
+var2ilr = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE){ 
+  
+  # determine if variables are in the simplex or in ILR coordinates
+  n_simplex = 0
+  n_ilr     = 0
+  
+  if (is.null(attr(Y,"space"))){
+    n_simplex = 1
+  }
+  
+  if (!is.null(attr(Y,"space"))){
+    if (attr(Y,"space")=="simplex"){
+      n_simplex=1
+    }
+    else{
+      n_ilr=1
+    }
+  }
+  
+  for (k in 1:length(X)){
+    if (!is.null(attr(X[[k]],"space"))){
+      if (attr(X[[k]],"space")=="simplex"){
+        n_simplex=n_simplex+1
+        }
+      else{
+        n_ilr=n_ilr+1
+      }
+    }
+  }
+  
+  # case when X, Y is in the simplex
+  
+  # if V specified
+  
+  if (!is.na(V[[1]][1,1])){
+    if (length(V)!=(1+length(X))){stop("When using the optional argument 'V' it is needed to specify one base matrix for the independent variable and one for each of the q dependent variable in a list that takes the form V = list(V_Y,V_X1...,V_Xq).")}
+    if (n_ilr!=0){stop("If V specified, every variable should be in the simplex")}
+    }
+    
+  # if V not specified
+  
+  if (n_ilr==0){
+    if (is.na(V[[1]][1,1])){
+      V=list(V_D(dim(Y)[2])) # this the 'standard' contrast matrix for Y
+      for (i in 1:length(X)){ # here 'standard' contrast matrices for X are added
+        V=c(V,list(V_D(dim(X[[i]])[2])))
+      }
+    }
+  }
+    
+  # now we have V for the simplex variables case
+  
+  # transform Y into ilr coordinates
+
+  ty = ilr(Y, V[[1]])
+    
+  # transfrom X to the ilr coordinates
+  tx = matrix(numeric(dim(X[[1]])[1]))+1 # here it is created a matrix which is a vector of ones (should be removed afterwords if c=False)
+  for (i in 1:length(X)){
+    tx = cbind(tx,ilr(X[[i]],V[[i+1]])) # the transformed X is created as a unique matrix
+    }
+  if (constant==FALSE){ # should remove the vector of zeros if no constant is required
+    tx=tx[,-1]
+    }
+  if (!is.na(Z[[1]][1,1])){
+    for (z in Z){
+      tx=cbind(tx,z)
+    }
+  }
+  
+  # case where some variables in the simplex, some in ilr
+  
+  if (min(c(n_simplex,n_ilr))!=0){
+    stop("Every variable should be in the same space, whether ilr coordinates or the simplex.")
+  }
+    
+  # every variable in ilr coordinates (and therefore V not specified directly, but in their attributes)
+  
+  if (n_simplex==0){
+    # construct ty (and recover V)
+    V=list()
+    ty = Y
+    V[[1]]=attr(Y,"base")
+    # construct tx (and recover V)
+    tx = matrix(numeric(dim(X[[1]])[1]))+1
+    for (k in 1:length(X)){
+      tx = cbind(tx,X[[k]])
+      V[[k+1]]=attr(X[[k]],"base")
+      }
+    if(constant==FALSE){ # should remove the vector of zeros if no constant is required
+      tx=tx[,-1]
+      }
+    if (!is.na(Z[[1]][1,1])){
+      for (z in Z){
+        tx=cbind(tx,z)
+      }
+    }
+  }
+  
+  return (list(Y=ty,X=tx,V=V,constant=constant))
+}
+```
+
+Some examples:
+
+```{r}
+var2ilr(m1,list(m2))
+```
+
+```{r}
+var2ilr(m1,list(m2),V=list(m3))
+```
+```{r}
+m4
+```
+
+
+
+```{r}
+var2ilr(m4,list(m2))
+```
+
+
+```{r}
+# eq 4 ASJ paper (Ngyugen, Laurent, Thomas-Agnan, Ruiz-Gazen)
+
+# VERSION 2.0.0 (with attributes and using the var2ilr function)
+
+xy_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
+# pres = TRUE to print with a better presentation (name of variables and sd if it is the case) of B and B*.
+  
+  input = var2ilr(Y,X,Z,V,constant)
+  ty = input$Y
+  tx = input$X
+  constant = input$constant
+  V = input$V
+  
+  if (dim(ty)[1]<=dim(tx)[2]){
+    warning("WARNING: Number of ilr parameters to be estimated greater than sample size \n")
+    if (verbose){print(" ")}
+  }
+  
+  if (verbose){
+  print("XY REGRESSION")
+  print("===========================")
+  
+  print("ILR Y-Matrix")
+  print(ty)
+  print("ILR X-Matrix")
+  print(tx)}
+
+  Bstar = mlm(ty,tx)
+  bcov = b_cov(tx,ty,Bstar)
+  Bs = t(matrix(numeric(dim(Y)[2])))
+  
+  if (verbose){
+  print("B* in the coordinates space:")
+  print(Bstar)
+  print("---------------------------")}
+  if (constant==TRUE){
+    b0=inverseilr(t(Bstar[1,]),V[[1]])
+    Bs = rbind(Bs, b0)
+    if (verbose){
+    print("b0 in the simplex:")
+    print(b0)}
+  }
+  h=2
+  if (verbose){print("---------------------------")}
+  for (i in 1:length(X)){
+    if (verbose){print(paste("B (in the simplex) for the comp. variable, X", i, sep=""))}
+    # number of parts?
+    if (is.null(attr(X[[i]],"space"))){dimx = dim(X[[i]])[2]} #number of parts of this variable i of X D parts --> D-1 param in the ilr 
+    if (!is.null(attr(X[[i]],"space"))){
+      if (attr(X[[i]],"space")=="simplex"){
+        dimx = dim(X[[i]])[2]
+      }
+      else{dimx = dim(X[[i]])[2]+1}
+    }
+    if (h==(h+dimx-2)){matrix_x = t(matrix(Bstar[h,]))}
+    if (h!=(h+dimx-2)){matrix_x = Bstar[h:(h+dimx-2),] }
+    B_q = V[[1]]%*%t(matrix_x)%*%t(V[[i+1]])
+    Bs= rbind(Bs, t(B_q))
+    h=h+dimx-1
+    if (verbose){print(t(B_q))}
+  }
+  if (verbose){print("---------------------------")}
+  for (i in 1:length(Z)){
+    if (verbose){print(paste("B (in the simplex) for the non-comp. variable, Z", i, sep=""))}
+    dimz = dim(Z[[i]])[2]
+    if (h==(h+dimz-1)){matrix_z = t(matrix(Bstar[h,]))}
+    if (h!=(h+dimz-1)){matrix_z = Bstar[h:(h+dimz-1),]} # it is non comp, it does not lose a dimension in the transformation
+    h=h+dimz-1
+    c_k = inverseilr(matrix_z, V[[1]])
+    Bs = rbind(Bs, c_k)
+    if (verbose){print(c_k)}
+  }
+  Bs = Bs[-1,]
+  attr(Bstar,"space")="ilr"
+  attr(Bstar,"base") = V
+  
+  attr(tx,"space") = "ilr"
+  attr(tx,"base") = V[-1]
+  
+  attr(Bs,"space")="simplex"
+  
+  if (!pres){return(list(Y_ilr = ty, X_ilr = tx, B_ilr = Bstar, B_simplex = Bs , B_cov=bcov))} # return results if not pres
+  
+  # part of PRES = TRUE
+  
+  if (pres){
+    dfsimplex = data.frame(Bs)
+    name=c()
+    for (i in 1:(dim(Y)[2])){
+      name = c(name, paste("Y_", i, sep=""))
+    }
+    colnames(dfsimplex)=name
+    
+    rname = c()
+    if (constant){rname = c(rname, "intercept")}
+    for (i in 1:length(X)){
+      for (j in 1:(dim(X[[i]])[2])){
+        rname = c(rname, paste("X",i,j,sep="_"))
+      }
+    }
+    
+    if (!is.na(Z[[1]][1,1])){
+      for (i in 1:length(Z)){
+        for (j in 1:(dim(Z[[i]])[2])){
+           rname = c(rname, paste("Z",i,j,sep="_"))
+        }
+      }
+    }
+    
+    rownames(dfsimplex)=rname
+    
+    cnames = c()
+    for (i in (1:(dim(Y)[2]-1))){
+      cnames = c(cnames, paste("Yilr_",i,sep=""))
+      cnames = c(cnames, paste("(sd_Yilr_",i,")",sep=""))
+    }
+    
+    rname = c()
+    if (constant){rname = c(rname, "intercept")}
+    for (i in 1:length(X)){
+      for (j in 1:(dim(X[[i]])[2]-1)){
+        rname = c(rname, paste("X",i,j,sep="_"))
+          }
+        }
+    
+    if (!is.na(Z[[1]][1,1])){
+      for (i in 1:length(Z)){
+        for (j in 1:(dim(Z[[i]])[2])){
+           rname = c(rname, paste("Z",i,j,sep="_"))
+        }
+      }
+    }
+
+    
+    # B star and sds
+    dfilr = data.frame(Bstar)
+    
+    
+    
+    # sds
+    dimilr = dim(Y)[2]-1
+    nc = dim(dfilr)[1]
+    for (i in dimilr:1){
+      if (i==dimilr){dfilr = cbind(dfilr,matrix(nrow=nc))}
+      else{
+        dfilr = cbind(dfilr[,1:i],matrix(nrow=nc),dfilr[,(i+1):(dim(dfilr)[2])])
+      }
+    }
+    
+    dfilr = t(dfilr)
+    
+    for (i in 1:(dim(bcov)[1])){
+      dfilr[2*i] = sqrt(bcov[i,i]) # standard deviation as sqrt of var
+    }
+    dfilr = t(dfilr)
+    
+    rownames(dfilr) = rname
+    colnames(dfilr) = cnames
+    
+    
+    print("      B (COEFFICIENTS IN THE SIMPLEX):      ")
+    print(as.matrix(dfsimplex))
+    print("--------------------------------------------")
+    print("     B* (COEF. and SD IN THE ILR SPACE):    ")
+    print(as.matrix(dfilr))
+  }
+}
+```
+
+```{r}
+m1 = example_matrices()[[1]]
+m2 = example_matrices()[[2]]
+m3 = example_matrices()[[3]]
+m4 = example_matrices()[[4]]
+m5 = example_matrices()[[5]]
+```
+
+```{r}
+results = xy_reg(Y=m1,X=list(m2),Z=list(m5),constant=TRUE,verbose=FALSE)
+results$B_simplex
+```
+
+Does it make sense to keep the set of bases for B in the ilr space?
+
+```{r}
+results$B_ilr
+```
+
+Example with pres=TRUE:
+
+```{r}
+xy_reg(Y=m1,X=list(m2),Z=list(m5),constant=TRUE,verbose=FALSE, pres=TRUE)
+```
 
