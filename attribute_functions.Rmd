@@ -56,6 +56,25 @@ C=function(x, k){ # x the NxD matrix, k the constant (k=1 if missing)
 } 
 ```
 
+## The perturbation, multiplication and powering
+
+```{r}
+pt = function (x,y){
+  return(C(x*y))
+}
+```
+
+
+
+```{r}
+pw=function(l,x){ # x the vector (matrix 1xD) and l stands for the scalar
+  return(C(x**l))
+}
+```
+
+
+
+
 # Transformation functions (ilr, inverseolr,...)
 
 ## Function that creates the Helmert Matrix
@@ -141,7 +160,7 @@ inverseilr=function(x,V){
   }
   inv_mat = C(t(exp(V%*%x)))
   attr(inv_mat,"space") = "simplex"
-  attr(inv_mat,"base") = V
+  attr(inv_mat,"base") = NULL
   return(inv_mat)
 }
 ```
@@ -346,10 +365,6 @@ var2ilr(m1,list(m2))
 ```{r}
 var2ilr(m1,list(m2),V=list(m3))
 ```
-```{r}
-m4
-```
-
 
 
 ```{r}
@@ -420,15 +435,18 @@ xy_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbose=F
     if (verbose){print(t(B_q))}
   }
   if (verbose){print("---------------------------")}
-  for (i in 1:length(Z)){
-    if (verbose){print(paste("B (in the simplex) for the non-comp. variable, Z", i, sep=""))}
-    dimz = dim(Z[[i]])[2]
-    if (h==(h+dimz-1)){matrix_z = t(matrix(Bstar[h,]))}
-    if (h!=(h+dimz-1)){matrix_z = Bstar[h:(h+dimz-1),]} # it is non comp, it does not lose a dimension in the transformation
-    h=h+dimz-1
-    c_k = inverseilr(matrix_z, V[[1]])
-    Bs = rbind(Bs, c_k)
-    if (verbose){print(c_k)}
+  
+  if (!is.na(Z[[1]][1,1])){
+    for (i in 1:length(Z)){
+      if (verbose){print(paste("B (in the simplex) for the non-comp. variable, Z", i, sep=""))}
+      dimz = dim(Z[[i]])[2]
+      if (h==(h+dimz-1)){matrix_z = t(matrix(Bstar[h,]))}
+      if (h!=(h+dimz-1)){matrix_z = Bstar[h:(h+dimz-1),]} # it is non comp, it does not lose a dimension in the transformation
+      h=h+dimz-1
+      c_k = inverseilr(matrix_z, V[[1]])
+      Bs = rbind(Bs, c_k)
+      if (verbose){print(c_k)}
+    }
   }
   Bs = Bs[-1,]
   attr(Bstar,"space")="ilr"
@@ -440,6 +458,8 @@ xy_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbose=F
   attr(Bs,"space")="simplex"
   
   if (!pres){return(list(Y_ilr = ty, X_ilr = tx, B_ilr = Bstar, B_simplex = Bs , B_cov=bcov))} # return results if not pres
+  
+  
   
   # part of PRES = TRUE
   
@@ -528,6 +548,12 @@ xy_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbose=F
 ```
 
 ```{r}
+xy_reg(Y=m1,X=list(m2))
+```
+
+
+
+```{r}
 m1 = example_matrices()[[1]]
 m2 = example_matrices()[[2]]
 m3 = example_matrices()[[3]]
@@ -552,3 +578,85 @@ Example with pres=TRUE:
 xy_reg(Y=m1,X=list(m2),Z=list(m5),constant=TRUE,verbose=FALSE, pres=TRUE)
 ```
 
+## Output from MVLM package
+
+I believe I have replicated it in a correct way, as we are only interested in coefficients and sds.
+
+```{r}
+install.packages("MVLM")
+library("MVLM")
+```
+
+I am not sure that 'y.rsq' retuns the sds. This is what the documentation state about it: "A matrix containing in its first row the overall variance explained by the model
+for variable comprising Y (columns). The remaining rows list the variance of
+each outcome that is explained by the conditional effect of each predictor"
+
+```{r}
+# example from the documentation: 
+
+data(mvlmdata)
+Y <- as.matrix(Y.mvlm)
+# Main effects model
+mvlm.res <- mvlm(Y ~ Cont + Cat + Ord, data = X.mvlm)
+print("are this sds?")
+print(mvlm.res$y.rsq)
+
+print("coefficients")
+print(mvlm.res$beta.hat)
+```
+
+I do not see this interesting to us: 
+
+```{r}
+summary(mvlm.res)
+```
+
+
+
+# Impact Functions
+
+I will start coding the function impacts(Y,X) which would compute the impacts directly from data. Features:
+
+- Personalised V bases
+
+Later I will add the following features:
+
+- specifying B (coefficients matrix)
+- adding total option
+
+It will return a matrix with the computed impacts and then we can start thinking in constructing a report.
+
+Just to be clear, this is the explanation: (if it is, I will translate it properly here)
+
+![Explanation of Impacts](/Users/ivanrendobarreiro/coda/img/explanation_impact.jpg)
+Therefore, first, I need a function to compute $\mathbb{E}^\oplus Y = \left(b_0\right) \oplus \left(B_1\boxdot X_1 \oplus ...\oplus B_Q \boxdot X_Q\right) \oplus \left(b_1\odot Z_1 \oplus ... \oplus b_K\odot Z_K\right)$
+
+(I believe I can skip this -I have problems with the matrix multiplication- and comupte E(Y) in the ilr space and transform it to the simplex.)
+
+
+```{r} 
+xy_impact = function(Y,X,Z=list(matrix()),V=list(matrix()), constant=TRUE){
+  res = xy_reg(Y,X,Z,V,constant)
+  B = res$B_ilr
+  tx = res$X_ilr
+  Bsimplex = res$B_simplex
+  exp_Yilr = tx%*%B
+  Vy = attr(B,"base")[[1]]
+  exp_Y_simplex = inverseilr(exp_Yilr,Vy)
+  I_D = diag(dim(exp_Y_simplex)[2])
+  N=dim(exp_Y_simplex)[1]
+  impacts = list()
+  for (i in (1:N)){
+    W_i = I_D - matrix(1,dim(exp_Y_simplex)[2],1)%*%exp_Y_simplex[i,]
+    imp_i = W_i%*%t(Bsimplex)
+    impacts[[i]] = t(imp_i)
+  }
+  return(impacts)
+}
+```
+
+It returns one matrix for each observation: **is all this OK?**
+
+```{r}
+xy_impact(Y=m1,X=list(m2)) 
+```
