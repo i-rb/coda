@@ -103,6 +103,7 @@ attr(a, "space") <- "simplex"
 attr(a, "V") <- m1
 a
 ```
+
 ```{r}
 attr(a, "space")
 ```
@@ -356,7 +357,16 @@ var2ilr = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE){
 }
 ```
 
-Some examples:
+Some examples (I should recover the original matrices)
+
+```{r}
+m1 = example_matrices()[[1]]
+m2 = example_matrices()[[2]]
+m3 = example_matrices()[[3]]
+m4 = example_matrices()[[4]]
+m5 = example_matrices()[[5]]
+```
+
 
 ```{r}
 var2ilr(m1,list(m2))
@@ -364,11 +374,6 @@ var2ilr(m1,list(m2))
 
 ```{r}
 var2ilr(m1,list(m2),V=list(m3))
-```
-
-
-```{r}
-var2ilr(m4,list(m2))
 ```
 
 
@@ -547,11 +552,6 @@ xy_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbose=F
 }
 ```
 
-```{r}
-xy_reg(Y=m1,X=list(m2))
-```
-
-
 
 ```{r}
 m1 = example_matrices()[[1]]
@@ -563,16 +563,15 @@ m5 = example_matrices()[[5]]
 
 ```{r}
 results = xy_reg(Y=m1,X=list(m2),Z=list(m5),constant=TRUE,verbose=FALSE)
-results$B_simplex
+results
 ```
 
-Does it make sense to keep the set of bases for B in the ilr space?
 
 ```{r}
-results$B_ilr
+results$Y_ilr
 ```
 
-Example with pres=TRUE:
+Example with pres=TRUE: 
 
 ```{r}
 xy_reg(Y=m1,X=list(m2),Z=list(m5),constant=TRUE,verbose=FALSE, pres=TRUE)
@@ -635,7 +634,7 @@ Therefore, first, I need a function to compute $\mathbb{E}^\oplus Y = \left(b_0\
 
 
 ```{r} 
-xy_impact = function(Y,X,Z=list(matrix()),V=list(matrix()), constant=TRUE){
+xy_impact_data = function(Y,X,Z=list(matrix()),V=list(matrix()), constant=TRUE){
   res = xy_reg(Y,X,Z,V,constant)
   B = res$B_ilr
   tx = res$X_ilr
@@ -658,5 +657,199 @@ xy_impact = function(Y,X,Z=list(matrix()),V=list(matrix()), constant=TRUE){
 It returns one matrix for each observation: **is all this OK?**
 
 ```{r}
-xy_impact(Y=m1,X=list(m2)) 
+xy_impact_data(Y=m1,X=list(m2)) 
 ```
+
+Here impacts for a specific B (mat of coef.). First, I need a function to transform B into B* and another from B to B*
+
+```{r}
+bstar2b = function(Bstar,Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE){ # Bstar is the sp. B*, Y,X,Z in the simplex
+  input = var2ilr(Y,X,Z,V,constant)
+  ty = input$Y
+  tx = input$X
+  constant = input$constant
+  V = input$V
+  
+  # take the base matrix in B if it exists
+  
+  if (!is.null(attr(Bstar,"base"))){
+    V = attr(Bstar,"base")
+  }
+  
+  Bs = t(matrix(numeric(dim(Y)[2])))
+  if (constant==TRUE){
+    b0=inverseilr(t(Bstar[1,]),V[[1]])
+    Bs = rbind(Bs, b0)
+  }
+  h=2
+  for (i in 1:length(X)){
+    if (is.null(attr(X[[i]],"space"))){dimx = dim(X[[i]])[2]} #number of parts of this variable i of X D parts --> D-1 param in the ilr 
+    if (!is.null(attr(X[[i]],"space"))){
+      if (attr(X[[i]],"space")=="simplex"){
+        dimx = dim(X[[i]])[2]
+      }
+      else{dimx = dim(X[[i]])[2]+1}
+    }
+    if (h==(h+dimx-2)){matrix_x = t(matrix(Bstar[h,]))}
+    if (h!=(h+dimx-2)){matrix_x = Bstar[h:(h+dimx-2),] }
+    B_q = V[[1]]%*%t(matrix_x)%*%t(V[[i+1]])
+    Bs= rbind(Bs, t(B_q))
+    h=h+dimx-1
+  }
+  
+  
+  if (!is.na(Z[[1]][1,1])){
+    for (i in 1:length(Z)){
+      dimz = dim(Z[[i]])[2]
+      if (h==(h+dimz-1)){matrix_z = t(matrix(Bstar[h,]))}
+      if (h!=(h+dimz-1)){matrix_z = Bstar[h:(h+dimz-1),]} # it is non comp, it does not lose a dimension in the transformation
+      h=h+dimz-1
+      c_k = inverseilr(matrix_z, V[[1]])
+      Bs = rbind(Bs, c_k)
+    }
+  }
+  Bs = Bs[-1,]
+  attr(Bstar,"space")="ilr"
+  attr(Bstar,"base") = V
+  
+  attr(tx,"space") = "ilr"
+  attr(tx,"base") = V[-1]
+  
+  attr(Bs,"space")="simplex"
+  return(Bs)
+  
+}
+
+```
+
+We can test that the function works fine:
+
+```{r}
+Btest = xy_reg(Y=m1,X=list(m2))$B_ilr
+bstar2b(Btest,m1,list(m2))
+```
+
+```{r}
+xy_reg(Y=m1,X=list(m2))$B_simplex
+```
+
+
+I am using the following equations to change the space of B and B*:
+
+$B = V_LB^*V'_D$
+$B^* = V'_LBV_D$
+
+
+```{r}
+xy_impact_coef = function(Y,X,Z=list(matrix()),V=list(matrix()), constant=TRUE, B, Bspace="ilr"){ #Bspace could be 'ilr' or 'simplex' and specifies which kind of matrix of coefficients is given.
+  
+  # if Bspace = simplex: transform to B*, get EY*, transform to EY and get the impacts with EY and B in the simplex
+  
+  if (Bspace =="simplex"){
+    Bs = matrix(0,1,dim(Y)[2]-1)
+    res = xy_reg(Y,X,Z,V,constant)
+    tx = res$X_ilr
+    if (is.na(V[[1]][1,1])){
+      V = attr(res$B_ilr, "base")
+    }
+    
+    h=1
+    if (constant){
+      b0s = ilr(t(matrix(B[1,])))
+      h=h+1
+      Bs = rbind(Bs, b0s)
+    }
+    
+    for (i in 1:length(X)){
+      dimx = dim(X[[i]])[2]
+      Bq = B[h:(h+dimx-1),]
+      Bqs = t(V[[1]])%*%t(Bq)%*%V[[i+1]]
+      h=h+dimx
+      Bs = rbind(Bs, t(Bqs))
+    }
+    if (!is.na(Z[[1]][1,1])){
+      for (i in 1:length(Z)){
+        dimz = dim(Z[[i]])[2]
+        bz = B[h:(h+dimz-1),]
+        bzs = ilr(bz,V[[1]])
+        h=h+dimz
+        Bs = rbind(Bs, bzs)
+      }
+    }
+    Bs = Bs[-1,] # this is the B* matrix (until here it works well - checked)
+    exp_Yilr = tx%*%Bs
+    exp_Y_simplex = inverseilr(exp_Yilr,V[[1]])
+    I_D = diag(dim(exp_Y_simplex)[2])
+    N=dim(exp_Y_simplex)[1]
+    Bsimplex = B
+    impacts = list()
+    for (i in (1:N)){
+      W_i = I_D - matrix(1,dim(exp_Y_simplex)[2],1)%*%exp_Y_simplex[i,]
+      imp_i = W_i%*%t(Bsimplex)
+      impacts[[i]] = t(imp_i)
+      }
+    return(impacts)
+  }
+  
+  
+  # if Bspace = ilr: i) compute EY*, transform to EY, get B* -> B and get the impacts with EY and B in the simplex
+  
+  if (Bspace=="ilr"){
+    res = xy_reg(Y,X,Z,V,constant)
+    tx = res$X_ilr
+    if (!is.null(attr(B,"base"))){
+      V=attr(B,"base")
+    }
+    if (is.null(attr(B,"base"))){
+      if (is.na(V[[1]][1,1])){
+        stop("A base V should be provided when the input is the matrix of coefficients in the ILR space.")
+      }
+    }
+    exp_Yilr = tx%*%B
+    Vy = attr(B,"base")[[1]]
+    exp_Y_simplex = inverseilr(exp_Yilr,Vy)
+    I_D = diag(dim(exp_Y_simplex)[2])
+    N=dim(exp_Y_simplex)[1]
+    Bsimplex = bstar2b(B,Y,X,Z,V,constant)
+    impacts = list()
+    for (i in (1:N)){
+      W_i = I_D - matrix(1,dim(exp_Y_simplex)[2],1)%*%exp_Y_simplex[i,]
+      imp_i = W_i%*%t(Bsimplex)
+      impacts[[i]] = t(imp_i)
+      }
+    return(impacts)
+  }
+}
+```
+
+In this example, performing 'xy_impact_coef' from B_ilr or B_simplex or 'xy_impact_data' should return the same results, as the matrices of coeff in the ilr and simplex space are the same that it is computed internally in 'xy_impact_data'.
+
+
+
+```{r}
+# matrices for the example
+
+Btestsimplex = xy_reg(Y=m1, X=list(m2), Z=list(m5))$B_simplex
+Btestilr     = xy_reg(Y=m1, X=list(m2), Z=list(m5))$B_ilr
+```
+
+
+```{r}
+# impacts having a specific B (in the simplex)
+
+xy_impact_coef(Y=m1,X=list(m2), Z=list(m5), B=Btestsimplex, Bspace="simplex")
+```
+
+```{r}
+# impacts having a specific B* (in the ilr)
+xy_impact_coef(Y=m1,X=list(m2), Z=list(m5), B=Btestilr, Bspace="ilr")
+```
+
+```{r}
+# impacts directly from data
+xy_impact_data(Y=m1,X=list(m2), Z=list(m5))
+```
+
+It works!!
+
+
