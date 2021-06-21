@@ -1,0 +1,173 @@
+---
+title: "ALR VERSION"
+output:
+  html_notebook:
+    toc: yes
+  html_document:
+    df_print: paged
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+
+```{r}
+example_matrices = function(){
+m1 = rbind(c(0.25,0.3,0.2),c(0.5,0.2,0.3),c(0.9,0.05,0.05),c(0.33,0.4,0.24),c(0.2,0.3,0.5),c(0.91,0.05,0.04),c(0.1,0.7,0.2)) 
+m2 = rbind(c(0.1,0.4,0.25,0.25),c(0.3,0.3,0.3,0.1),c(0.9,0.05,0.02,0.03),c(0.1,0.7,0.15,0.05),c(0.8,0.1,0.05,0.05),c(0.35,0.25,0.3,0.1),c(0.4,0.1,0.1,0.4)) 
+m3 = matrix(c(23,1,32,12,9,11,3)) 
+m4 = rbind(c(0.2,0.8),c(0.3,0.7),c(0.9,0.1),c(0.75,0.25),c(0.3,0.7),c(0.15,0.85),c(0.9,0.1))
+m5 = rbind(c(3,-4.3),c(0,-2),c(4,5),c(-2,3), c(4,2), c(1,11), c(23,2))
+return(list(m1,m2,m3,m4,m5))}
+```
+
+```{r}
+m1 = example_matrices()[[1]]
+m2 = example_matrices()[[2]]
+m3 = example_matrices()[[3]]
+m4 = example_matrices()[[4]]
+m5 = example_matrices()[[5]]
+```
+
+### Closure operator
+
+```{r}
+closure=function(x, k){ # x the NxD matrix, k the constant (k=1 if missing)
+  if (missing(k)){
+    newx <- (x)/rowSums(x)
+    return(newx)
+  }
+  else{
+    newx <- (k*x)/rowSums(x)
+    return(newx)
+  }
+} 
+```
+
+```{r}
+m1
+```
+
+
+
+```{r}
+alr = function(x){ #N x D matrix
+  D=dim(x)[2]
+  copy = x
+  for (i in 1:(dim(x)[1])){
+    trans = numeric(dim(x)[2])
+    for (j in 1:(dim(x)[2])){
+      trans[j]= log(x[i,j]/x[i,D])
+    }
+    copy[i,] = trans
+  }
+  return(copy[,-D])
+}
+```
+
+```{r}
+alr(m1)
+```
+
+```{r}
+compositions::alr(compositions::acomp(m1))
+```
+
+OK
+
+The inverse:
+
+```{r}
+inversealr = function(x){
+  aumented = cbind(x,numeric(dim(x)[1]))
+  return(closure(exp(aumented)))
+}
+```
+
+```{r}
+inversealr(alr(m1))
+```
+
+```{r}
+compositions::alrInv(compositions::alr(compositions::acomp(m1)))
+```
+
+OK!!!!
+
+```{r}
+F_D = function(D){
+  fd = diag(D-1)
+  fd = cbind(fd, numeric(D-1)-1)
+  return(fd)
+}
+```
+
+```{r}
+F_D(4)
+```
+
+OK
+
+```{r}
+log(m1)%*%t(F_D(dim(m1)[2]))
+```
+
+```{r}
+inversealr
+```
+
+
+```{r}
+alr(m1)
+```
+
+
+```{r}
+inversealr(alr(m1))
+```
+
+```{r}
+K_D = function(D){
+  upm = diag(D-1) - (numeric(D-1)+1)%*%t(numeric(D-1)+1)/D
+  down = -t(numeric(D-1)+1)/D
+  upm = rbind(upm,down)
+  return (upm)
+}
+```
+
+
+```{r}
+F_D(3)%*%K_D(3)
+```
+
+```{r}
+K_D(3)%*%F_D(3)
+```
+
+OK
+
+
+but how is the inverse of the alr in terms of these matrices?? I believe it is not possible to compute that with them, but through a DxD-1 matrix that I called $P_D$ such as:
+
+```{r}
+P_D = function(D){
+  return(rbind(diag(D-1),numeric(D-1)))
+}
+```
+
+Check...
+
+```{r}
+inversealr(alr(m1))
+```
+
+Works!!!!
+
+```{r}
+closure(exp(alr(m1)%*%t(P_D(3))))
+```
+
+```{r}
+closure(exp(alr(m1)%*%t(P_D(3))))
+```
+
+

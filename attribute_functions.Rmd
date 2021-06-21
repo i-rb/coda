@@ -537,7 +537,12 @@ xy_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbose=F
   
   attr(Bs,"space")="simplex"
   
-  if (!pres){return(list(Y_coord = ty, X_coord = tx, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov))} # return results if not pres
+  fittedvalues = tx%*%Bstar
+  resid = ty- fittedvalues
+  attr(resid,"space") = NULL
+  attr(resid,"contrast") = NULL
+  
+  if (!pres){return(list(Y_coord = ty, X_coord = tx, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues))} # return results if not pres
   
   
   
@@ -623,6 +628,8 @@ xy_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbose=F
     print("--------------------------------------------")
     print("     B* (COEF. and SD IN THE ILR SPACE):    ")
     print(as.matrix(dfilr))
+    print("--------------------------------------------")
+    print(paste("SSR: ", sum(resid^2), sep="")) # sum of squared residuals
   }
 }
 ```
@@ -636,8 +643,7 @@ m5 = example_matrices()[[5]]
 ```
 
 ```{r}
-results = xy_reg(Y=m1,X=list(m2),Z=list(m5),constant=TRUE,verbose=FALSE)
-results
+xy_reg(Y=m1,X=list(m2),Z=list(m5),constant=TRUE,verbose=FALSE)
 ```
 
 
@@ -983,17 +989,7 @@ xy_impacts(xy_reg(m1,list(m2)))
 
 ## X-Regression and X-impacts
 
-```{r}
-m1
-```
-
-
 ### x_reg
-
-```{r}
-list(m1,m2)
-```
-
 
 ```{r}
 x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
@@ -1186,11 +1182,8 @@ x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbose=FA
 x_reg(m1,list(m2),list(m5))
 ```
 
-```{r}
-m2
-```
 
-
+### x_impacts
 
 Apparently, it works
 
@@ -1233,6 +1226,348 @@ x_impacts(x_reg(m1,list(m2,m4)))
 
 ```{r}
 x_impacts(x_reg(m3,list(m2,m4)))
+```
+
+## Y-impact functions
+
+```{r}
+y_reg = function(Y,X,V=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
+# pres = TRUE to print with a better presentation (name of variables and sd if it is the case) of B and B*.
+  
+  tx = matrix(numeric(dim(X[[1]])[1]))+1 # X = tx as it is already in coord.
+  for (i in 1:length(X)){
+    tx = cbind(tx,X[[i]])
+    }
+  if (constant==FALSE){ # should remove the vector of ones if no constant is required
+    tx=tx[,-1]
+  }
+  
+  # transform Y to coordinates
+  if (!is.na(V)){ # if V specified as argument
+    ty = ilr(Y,V)
+  }
+  
+  else{
+    V=V_D(dim(Y)[2]) # if V not specified as argument
+    ty=ilr(Y,V)}
+  
+  if (verbose){
+  print("XY REGRESSION")
+  print("===========================")
+  
+  print("ILR Y-Matrix")
+  print(ty)
+  print("ILR X-Matrix")
+  print(tx)}
+  
+  Bstar = mlm(ty,tx)
+  # bcov = b_cov(tx,ty,Bstar) ######## some problems here
+  Bs = t(matrix(numeric(dim(Y)[2])))
+  
+  if (verbose){
+  print("B* in the coordinates space:")
+  print(Bstar)
+  print("---------------------------")}
+  if (constant==TRUE){
+    b0=inverseilr(t(Bstar[1,]),V)
+    Bs = rbind(Bs, b0)
+    if (verbose){
+    print("b0 in the simplex:")
+    print(b0)}
+  }
+  h=2
+  if (verbose){print("---------------------------")}
+  if (!is.na(X[[1]][1,1])){
+    for (i in 1:length(X)){
+      if (verbose){print(paste("B (in the simplex) for the non-comp. variable, X", i, sep=""))}
+      dimx = dim(X[[i]])[2]
+      if (h==(h+dimx-1)){matrix_x = t(matrix(Bstar[h,]))}
+      if (h!=(h+dimx-1)){matrix_x = Bstar[h:(h+dimx-1),]} # it is non comp, it does not lose a dimension in the transformation
+      h=h+dimx-1
+      c_k = inverseilr(matrix_x, V)
+      Bs = rbind(Bs, c_k)
+      if (verbose){print(c_k)}
+    }
+  }
+  Bs = Bs[-1,]
+  attr(Bstar,"space")="coord"
+  attr(Bstar,"contrast") = V
+  
+  attr(tx,"space") = "coord"
+  attr(tx,"contrast") = NaN
+  
+  attr(Bs,"space")="simplex"
+  
+  if (!pres){return(list(Y_coord = ty, X_coord = tx, B_coord = Bstar, B_simplex = Bs))} 
+# return results if not pres + Bcoord_cov=bcov
+  
+  
+  
+  # part of PRES = TRUE
+  
+  if (pres=="IN_PROGRESS"){
+    dfsimplex = data.frame(Bs)
+    name=c()
+    for (i in 1:(dim(Y)[2])){
+      name = c(name, paste("Y_", i, sep=""))
+    }
+    colnames(dfsimplex)=name
+    
+    rname = c()
+    if (constant){rname = c(rname, "intercept")}
+    for (i in 1:length(X)){
+      for (j in 1:(dim(X[[i]])[2])){
+        rname = c(rname, paste("X",i,j,sep="_"))
+      }
+    }
+    
+    if (!is.na(Z[[1]][1,1])){
+      for (i in 1:length(Z)){
+        for (j in 1:(dim(Z[[i]])[2])){
+           rname = c(rname, paste("Z",i,j,sep="_"))
+        }
+      }
+    }
+    
+    rownames(dfsimplex)=rname
+    
+    cnames = c()
+    for (i in (1:(dim(Y)[2]-1))){
+      cnames = c(cnames, paste("Yilr_",i,sep=""))
+      cnames = c(cnames, paste("(sd_Yilr_",i,")",sep=""))
+    }
+    
+    rname = c()
+    if (constant){rname = c(rname, "intercept")}
+    for (i in 1:length(X)){
+      for (j in 1:(dim(X[[i]])[2]-1)){
+        rname = c(rname, paste("X",i,j,sep="_"))
+          }
+        }
+    
+    if (!is.na(Z[[1]][1,1])){
+      for (i in 1:length(Z)){
+        for (j in 1:(dim(Z[[i]])[2])){
+           rname = c(rname, paste("Z",i,j,sep="_"))
+        }
+      }
+    }
+
+    
+    # B star and sds
+    dfilr = data.frame(Bstar)
+    
+    
+    
+    # sds
+    dimilr = dim(Y)[2]-1
+    nc = dim(dfilr)[1]
+    for (i in dimilr:1){
+      if (i==dimilr){dfilr = cbind(dfilr,matrix(nrow=nc))}
+      else{
+        dfilr = cbind(dfilr[,1:i],matrix(nrow=nc),dfilr[,(i+1):(dim(dfilr)[2])])
+      }
+    }
+    
+    dfilr = t(dfilr)
+    
+    for (i in 1:(dim(bcov)[1])){
+      dfilr[2*i] = sqrt(bcov[i,i]) # standard deviation as sqrt of var
+    }
+    dfilr = t(dfilr)
+    
+    rownames(dfilr) = rname
+    colnames(dfilr) = cnames
+    
+    
+    print("      B (COEFFICIENTS IN THE SIMPLEX):      ")
+    print(as.matrix(dfsimplex))
+    print("--------------------------------------------")
+    print("     B* (COEF. and SD IN THE ILR SPACE):    ")
+    print(as.matrix(dfilr))
+  }
+}
+```
+
+```{r}
+m1
+```
+
+```{r}
+m2
+```
+
+```{r}
+y_impacts = function(results){ #results argument regers to the output of y_reg
+  # first we need EY*
+  Bcoord = results$B_coord
+  Vy = attr(results$Y_coord, "contrast")
+  xcoord = results$X_coord
+  EYcoord = xcoord%*%Bcoord
+  EYsimpl = inverseilr(EYcoord,Vy)
+  D = dim(Vy)[1]
+  impacts=list()
+  for (i in 1:(dim(EYsimpl)[1])){
+    Wi = diag(D) - matrix(1,D,1)%*%t(EYsimpl[i,])
+    Wistar = Wi%*%Vy
+    impacts[[i]] = t(Wistar%*%t(Bcoord))
+  }
+  return(impacts)
+}
+```
+
+
+```{r}
+y_impacts(y_reg(m1,list(m2)))
+```
+
+I will try this functions in a large dataset, if they work, I'll compute some tiny example by hand. The large dataset is the 'BDDSegX_ext.RData' dataset.
+
+(The regressions performed do not follow any criterion)
+
+```{r}
+load(file = "/Users/ivanrendobarreiro/Documents/m1_econometrics/internship/week1/data_db/BDDSegX_ext.RData")
+```
+
+```{r}
+BDDSegX
+```
+
+SimS_A, SimS_B, SimS_C, SimS_D, SimS_E form the unique compositional variable: not possible to test xy-model but xy-model features the most developed code of the three models, so I simulate it.
+
+I'll simulate a 3 part variable.
+
+```{r}
+N = 152
+x1 = rnorm(N, mean=100, sd=10)
+x2 = rnorm(N, mean=90, sd=15)
+new = cbind(matrix(x1),x2)
+new = closure(new) # these are a D=2 new variable
+```
+
+other variables:
+
+TTC_SP98 
+Immat_neuf_VP
+
+```{r}
+m1 = matrix(BDDSegX$Immat_neuf_VP)
+m2 = matrix(BDDSegX$TTC_SP98)
+mc = BDDSegX[,c("SimS_A","SimS_B","SimS_C","SimS_D","SimS_E")]
+```
+
+```{r}
+dim(new)
+```
+
+
+### x model
+
+```{r}
+resx = x_reg(Y = m1, X = list(mc,new), Z=list(m2))
+x_impacts(resx) 
+```
+
+### y model
+
+```{r}
+resy = y_reg(Y = mc, X = list(m1,m2))
+y_impacts(resy)[1:3] # there are a lot of impacts
+```
+
+### xy model
+
+```{r}
+resxy = xy_reg(Y = mc, X = list(new), Z=list(m1,m2))
+y_impacts(resxy)[1:3] # there are a lot of impacts
+```
+
+Ill plot it, I would like to see them.
+
+```{r}
+imp_test = y_impacts(resxy)
+ts1=numeric(length(imp_test))
+ts2=numeric(length(imp_test))
+for (i in 1:length(imp_test)){
+  ts1[i]=imp_test[[i]][1,1] # the first element of the first column, for example
+  ts2[i]=imp_test[[i]][4,5] # and the 4,5 
+}
+```
+
+```{r}
+plot(ts1,type="l",col="blue",ylim=c(-2,-1.65))
+lines(ts2, col="red")
+```
+
+They are such as I would expect. :)
+
+## Results to test functions by hand
+
+### example matrices
+
+```{r}
+cvar1 = rbind(c(0.25,0.3,0.2),c(0.5,0.2,0.3),c(0.9,0.05,0.05),c(0.33,0.4,0.24))
+cvar2 = rbind(c(0.6,0.4),c(0.3,0.7),c(0.9,0.1),c(0.3,0.7))
+ncvar = matrix(c(4,1,10,3)) 
+```
+
+Compositional variable of D=3, N=4
+```{r}
+cvar1
+```
+
+Compositional variable of D=2, N=4
+```{r}
+cvar2
+```
+
+Standard variable, N=4
+
+```{r}
+ncvar
+```
+
+
+### xy-model
+
+$cv_1 = \beta_0 + \beta_1cv_2 + \beta_2ncv$
+
+#### xy-reg
+
+```{r}
+V_D(2)
+```
+
+
+```{r}
+xy_reg(cvar1,list(cvar2),list(ncvar))
+```
+
+#### xy-impacts
+
+
+```{r}
+xy_impacts(xy_reg(cvar1,list(cvar2),list(ncvar)))
+```
+
+my inverse...
+
+```{r}
+xtx = rbind(c(4,0.6414,18),c(0.6414,3.2148,14.286),c(18,14.286,126))
+(1/40.3386)*(xtx%*%xtx - 133.218*xtx + 393.423*diag(3))
+```
+
+concides!
+
+```{r}
+solve(xtx)
+```
+
+
+### Generator of bases through GS:
+
+```{r}
+qr(m4)$rank ### THIS IS THE KEY!!!!!
 ```
 
 
