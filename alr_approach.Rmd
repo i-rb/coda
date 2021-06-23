@@ -126,6 +126,12 @@ inversealr(alr(m1))
 ```
 
 ```{r}
+F_D = function(D){
+  fd = diag(D-1)
+  fd = cbind(fd, numeric(D-1)-1)
+  return(fd)
+}
+
 K_D = function(D){
   upm = diag(D-1) - (numeric(D-1)+1)%*%t(numeric(D-1)+1)/D
   down = -t(numeric(D-1)+1)/D
@@ -133,6 +139,15 @@ K_D = function(D){
   return (upm)
 }
 ```
+
+```{r}
+F_D(3)
+```
+
+```{r}
+K_D(3)
+```
+
 
 
 ```{r}
@@ -170,4 +185,8 @@ closure(exp(alr(m1)%*%t(P_D(3))))
 closure(exp(alr(m1)%*%t(P_D(3))))
 ```
 
+
+```{r}
+P_D(3)
+```
 
