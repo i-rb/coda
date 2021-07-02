@@ -1,0 +1,11 @@
+---
+title: "testing_packagezero"
+output:
+  html_notebook:
+    toc: yes
+  html_document:
+    df_print: paged
+    toc: yes
+  pdf_document:
+    toc: yes
+---

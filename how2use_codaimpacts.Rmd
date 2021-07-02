@@ -1,5 +1,5 @@
 ---
-title: "Package Functions througth 'attributes' (Week 4)"
+title: "create_package"
 output:
   html_notebook:
     toc: yes
@@ -10,15 +10,7 @@ output:
     toc: yes
 ---
 
-In this notebook I'll try to code the functions that will be implemented in the package. Up to here, it has been decided that it would be useful to add some attributes to matrices (which are the basic data structure we are manipulating) somehow simulating the behaviour of classes in R. These attributes will indicate what represent each matrix and in which space (for example, a given matrix $B$ could be the parameter estimation matrix in the coordinates and therefore we need to specify which base is used, i.e. in which particular coordinate space it lies). 
-
-The attributes that has matrices are "space" (ilr or simplex, possibly alr) and "base" (base matrix).
-
-This notebook continues the previous "functions_nb.Rmd" one and inherits its functions, while updating them to the new framework.
-
-### Matrices for the examples
-
-I create a function to recover easily the original 5 matrices that will be used in the examples, as they may be manipulated.
+This brief notebook is only to create the package
 
 ```{r}
 example_matrices = function(){
@@ -38,10 +30,14 @@ m4 = example_matrices()[[4]]
 m5 = example_matrices()[[5]]
 ```
 
+```{r}
+# this is to delete the past elements in the enviroment
+rm(list = ls())
+```
 
-# Preliminary Functions
+# All Defined Functions 
 
-## Closure operator (same as before)
+## Closure
 
 ```{r}
 closure=function(x, k){ # x the NxD matrix, k the constant (k=1 if missing)
@@ -56,32 +52,7 @@ closure=function(x, k){ # x the NxD matrix, k the constant (k=1 if missing)
 } 
 ```
 
-## The perturbation, multiplication and powering  (same as before)
-
-```{r} 
-# NOT NEEDED
-pt = function (x,y){
-  return(closure(x*y))
-}
-```
-
-
-
-```{r}
-# NOT NEEDED
-pw=function(l,x){ # x the vector (matrix 1xD) and l stands for the scalar
-  return(closure(x**l))
-}
-```
-
-
-
-
-# Transformation functions (ilr, inverseolr,...)
-
-## Function that creates the Helmert Matrix  (same as before)
-
-If $V$ (contrast matrix) is not passed, computations are done with the Helmert Matrix as default.
+## Helmert Matrix for D parts
 
 ```{r} 
 # Creates de Helmert Matrix given the number of parts of the variable
@@ -99,21 +70,7 @@ V_D = function(D){ # D is the dimension (parts)
 }
 ```
 
-
-## ILR transformation
-
-Given a matrix NxD and a V contrast matrix, the function returns the ilr-transformed coordinates in a matrix. 
-
-If the matrix has "ilr" attribute, it returns an error: "already in coordinates space".
-If the matrix has "simplex" attribute or has no attribute, it is given two attributes: "ilr" (that substitutes "simplex", if it is the case) and the V base matrix used.
-
-
-I.e: 
-
-Simplex -> Ilr
-NoSpecified -> Ilr
-Ilr -> Error
-
+## ILR Transformation
 
 ```{r}
 ilr = function(x, V){ # x matrix N x D
@@ -129,40 +86,7 @@ ilr = function(x, V){ # x matrix N x D
 }
 ```
 
-Examples:
-
-```{r}
-ilr(m1)
-```
-
-However, if it is tried to pass a ilr-matrix as an input (is this correct in English?):
-
-```{r}
-attr(m1, "space") = "ilr_coord"
-
-ilr(m1)
-```
-
-
-
-## Inverse of the Ilr
-
-This is the contrary case. If given a matrix with a "simplex" attribute, it would raise an error. If $V$ base is specified, that matrix is used. If not, it is preferred the base matrix that is given as an attribute of the matrix to transform. If none of them exist, the Helbert matrix is used.
-
-I.e:
-
-Ilr -> Simplex
-NoSpecified -> Simplex
-Simplex -> Raise Error
-
-V is used with this preference:
-
-1) V specified as argument
-2) Contrast matrix attribute of the data
-3) Helmert Matrices
-
-This scheme is used hereinafter
-
+## Inverse of the ILR
 
 ```{r}
 inverseilr=function(x,V){
@@ -182,43 +106,7 @@ inverseilr=function(x,V){
 }
 ```
 
-An example:
-
-```{r}
-ilrm2 = ilr(m2) 
-ilrm2
-```
-
-```{r}
-inverseilr(ilrm2)
-```
-
-However, if we try to input a matrix in the simplex space...
-
-```{r}
-m1 = example_matrices()[[1]]
-m1
-```
-
-```{r}
-ilr(m1)
-```
-
-
-```{r}
-Vex = compositions::ilrBase(D=3)
-Vex   
-```
-
-```{r}
-inverseilr(ilr(m1),V=Vex)
-```
-
-## ALR 
-
-Simplex -> alr
-NoSpecified -> alr
-alr -> Error
+## ALR
 
 ```{r}
 alr = function(x,R=dim(x)[2]){ # x: N x D matrix, R : Reference (last term by default)
@@ -240,18 +128,8 @@ alr = function(x,R=dim(x)[2]){ # x: N x D matrix, R : Reference (last term by de
 }
 ```
 
-```{r}
-m1 = example_matrices()[[1]]
-alr(m1)
-```
 
-
-## Inverse of the ALR
-
-alr -> alr_coord
-none -> alr_coord
-ilr_coord or alr_coord -> error
-
+## Inverse ALR
 
 ```{r}
 inversealr = function(x,R=dim(x)[2]+1){ # x = NxD-1 matrix, R original reference variable
@@ -268,26 +146,8 @@ inversealr = function(x,R=dim(x)[2]+1){ # x = NxD-1 matrix, R original reference
 }
 ```
 
-```{r}
-closure(m1)
-```
 
-
-```{r}
-inversealr(alr(m1,2),2) # testing with D=2 instead of the classical D=3
-```
-
-works fine !
-
-# Functions for the Regression 
-
-## Estimation of the coefficients (Same than before)
-
-Given the model: $\begin{pmatrix} y_1\\ y_2\\ ...\\ y_{p}\end{pmatrix} = D\begin{pmatrix}\beta_1\\\beta_2\\...\\ \beta_{p}\end{pmatrix} + \begin{pmatrix}u_1\\u_2\\...\\ u_{p} \end{pmatrix}$
-
-The BLUE estimator of $B$ is obtained computing: 
-
-$\hat{B} = (X^TX)^{-1}X^TY$
+## Estimation of the coefficients of any multivariate regression
 
 ```{r}
 mlm = function(Y,X){ # only the dependent and independent matrices are needed
@@ -297,13 +157,7 @@ mlm = function(Y,X){ # only the dependent and independent matrices are needed
 }
 ```
 
-## Estimation of the variance (Same than before)
-
-### Function 20. Variance-covariance matrices.
-
-In order to obtain the estimator of the variance matrix of the parameters, first it is needed to estimate the common covariance structure $\Sigma$. Recall that $\mathrm{cov}(Y)=I_n\otimes \Sigma$. Then: 
-
-$\hat{\Sigma}=\dfrac{Y'(I-X(X'X)^{-1}X')Y}{n}=\dfrac{(Y-X\hat{B})'(Y-X\hat{B})}{n}$
+## Varaince-covariance matrix
 
 ```{r}
 est_var = function(X,Y,B){ # page 146 kevin
@@ -314,39 +168,17 @@ est_var = function(X,Y,B){ # page 146 kevin
 }
 ```
 
-Now we can use the $\mathrm{cov}(\hat{\beta})$ estimator from the Kevin book:
+## Covariance of parameters (kevin book p145)
 
 ```{r}
-# p 145 Kevin (5.13)
-
 b_cov = function(X,Y,B){
   sig = est_var(X,Y,B)
   cov = kronecker(sig,solve(t(X)%*%X))
   return(round(cov,5))
 }
-
 ```
 
-## Compositional Regressions 
-
-### yx reg (coefficients est.)
-
-Recall that the regression in the ILR coordinate space is defined by:
-
-$\mathrm{ilr}(\mathbf{Y}_i) = \mathbf{b}_0^*+ \sum_{q=1}^Q\mathrm{ilr}(\mathbf{X}_{qi})\mathbf{B}^*_q + \sum_{k=1}^K Z_{ki} \mathbf{b}^*_k + \mathrm{ilr}(\epsilon_i)$.
-
-This function:
-  - Can take Y in the ilr (then no first transformation is carried out, if it features the attribute "space"="ilr") or the simplex space (by default, if no attribute indicated).
-  - Can take any X in the ilr (then no first transformation is carried out) or the simplex space (by default, if no attribute indicated).
-  - To be precise: it cannot take some X variables in the ilr space and some in the simplex. 
-  - Take Z in the ilr space.
-  - Return (optional) a named list, such that the user can easily write, for example: results\$bstar and recover specifically the ilr matrix of coefficients $B^*$.
-  - Print (optional) the results.
-  
-  - As previously, if a list of base matrices V is indicated, it is used (if Y,X in the simplex, raise an error if not -- this could be done, but it is a headache and I believe the use is limited). If not, those indicated as an attribute are used (if Y,X are ilr matrices).
-
-Therefore, this first function takes every variable that is needed to carry out the regression and returns those variables in the ilr space with the base matrices already as attributes.
-
+## Transform every variable (ILR or not, not ALR) to ILR
 
 ```{r}
 var2ilr = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE){ 
@@ -485,39 +317,7 @@ var2ilr = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE){
 }
 ```
 
-Some examples (I should recover the original matrices)
-
-```{r}
-m1 = example_matrices()[[1]]
-m2 = example_matrices()[[2]]
-m3 = example_matrices()[[3]]
-m4 = example_matrices()[[4]]
-m5 = example_matrices()[[5]]
-```
-
-
-
-```{r}
-Vtest = var2ilr(m1,list(m2))$V
-```
-
-```{r}
-Vtest[[1]][1,2]=Vtest[[1]][1,1]
-Vtest[[1]][1,1]=0
-```
-
-This is an example of the warning:
-
-```{r}
-var2ilr(ilr(m1),list(ilr(m2)), V= Vtest)
-```
-
-ilr_yx_reg is the same function than before but there are two modes:
-
-- (report/presentation mode): pres=TRUE
-- (return mode): by default, pres=FALSE (return a named list such that ilr_yx_reg(...)$B_ilr returns the B matrix in the coordinates space and so)
-
-- intermediate prints can be enabled with verbose=TRUE
+## ILR yx reg
 
 ```{r}
 # eq 4 ASJ paper (Ngyugen, Laurent, Thomas-Agnan, Ruiz-Gazen)
@@ -609,7 +409,10 @@ ilr_yx_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbo
   attr(resid,"space") = NULL
   attr(resid,"contrast") = NULL
   
-  if (!pres){return(list(Y_coord = ty, X_coord = tx, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues))} # return results if not pres
+  reslist = list(Y_coord = ty, X_coord = tx, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
+  attr(reslist,"transformation") = "ILR"
+  
+  if (!pres){return(reslist)} # return results if not pres
   
   
   
@@ -701,34 +504,7 @@ ilr_yx_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbo
 }
 ```
 
-
-
-```{r}
-m1 = example_matrices()[[1]]
-m2 = example_matrices()[[2]]
-m3 = example_matrices()[[3]]
-m4 = example_matrices()[[4]]
-m5 = example_matrices()[[5]]
-```
-
-```{r}
-ilr_yx_reg(Y=m1,X=list(m2),Z=list(m5),constant=TRUE,verbose=FALSE)
-```
-
-
-```{r}
-results$Y_coord
-```
-
-Example with pres=TRUE: 
-
-```{r}
-ilr_yx_reg(Y=m1,X=list(m2),Z=list(m5),constant=TRUE,verbose=FALSE, pres=TRUE)
-```
-
-
-### ALR yx reg
-
+## Transform every variable to ALR
 
 ```{r}
 var2alr = function(Y,X,Z=list(matrix()),R=list(matrix()),constant=TRUE){ 
@@ -867,9 +643,15 @@ var2alr = function(Y,X,Z=list(matrix()),R=list(matrix()),constant=TRUE){
 }
 ```
 
-works fine
+## P_D matrix
 
-$F_D,K_D$ matrices to obtain $B$ from $B^*$.
+```{r}
+P_D = function(D){
+  return(rbind(diag(D-1),numeric(D-1)))
+}
+```
+
+## F_D matrix
 
 ```{r}
 F_D = function(D){
@@ -877,7 +659,11 @@ F_D = function(D){
   fd = cbind(fd, numeric(D-1)-1)
   return(fd)
 }
+```
 
+## K_D matrix
+
+```{r}
 K_D = function(D){
   upm = diag(D-1) - (numeric(D-1)+1)%*%t(numeric(D-1)+1)/D
   down = -t(numeric(D-1)+1)/D
@@ -886,6 +672,7 @@ K_D = function(D){
 }
 ```
 
+## Permutation of a column to the last position
 
 ```{r}
 permutation_D = function(mat,P){ # this function takes as an input a matrix (mat) and position (P) and returns the same matrix but with the column P as the last column, i.e: [x1,x2...,xP,...,xN] -> [x1,x2...,xN,xP]
@@ -902,6 +689,8 @@ permutation_D = function(mat,P){ # this function takes as an input a matrix (mat
 }
 ```
 
+## Inverse of the permutation
+
 ```{r}
 inv_permutation_D = function(mat,P){ # undoes the permutation
   D = dim(mat)[2]
@@ -917,14 +706,7 @@ inv_permutation_D = function(mat,P){ # undoes the permutation
 }
 ```
 
-```{r}
-m1
-```
-
-```{r}
-inv_permutation_D(permutation_D(m1,1),1)
-```
-
+## ALR yx reg
 
 ```{r}
 alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of reference variables order: (Y, X1, X2, ...) 
@@ -937,7 +719,6 @@ alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=F
     input = var2alr(Y,X,Z,constant=constant)
     }
   }
-  
   else{
     input = var2alr(Y,X,Z,constant=constant)
     R=input$R
@@ -1006,7 +787,7 @@ alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=F
       if (h==(h+dimz-1)){matrix_z = t(matrix(Bstar[h,]))}
       if (h!=(h+dimz-1)){matrix_z = Bstar[h:(h+dimz-1),]} # it is non comp, it does not lose a dimension in the transformation
       h=h+dimz
-      c_k = inversealr(matrix_z, R[[1]]) 
+      c_k = inversealr(matrix_z, R[[1]]) # change R[[1]] with the other...
       Bs = rbind(Bs, c_k)
       if (verbose){print(c_k)}
     }
@@ -1025,7 +806,9 @@ alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=F
   attr(resid,"space") = NULL
   attr(resid,"contrast") = NULL
   
-  if (!pres){return(list(Y_coord = ty, X_coord = tx, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues))} # return results if not pres
+  reslist = list(Y_coord = ty, X_coord = tx, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
+  attr(reslist,"transformation") = "ALR"
+  if (!pres){return(reslist)} # return results if not pres
   
   
   
@@ -1116,335 +899,11 @@ alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=F
 }
 ```
 
-Works perfectly 
-
-```{r}
-K_D(2)%*%(t(matrix(c(2,  2))))%*%F_D(3)
-```
-
-```{r}
-ilr_yx_reg(m1,list(m4),list(m3,m5),pres=TRUE,verbose=FALSE)
-```
-
-
-```{r}
-alr_yx_reg(Y=m1,X=list(m4),Z=list(m3,m5),R=list(3,2),pres=TRUE,verbose=FALSE)
-```
-
-```{r}
-ilr_yx_reg(m1,list(m2,m4),list(m3),pres=TRUE)
-```
-
-
-## Output from MVLM package
-
-I believe I have replicated it in a correct way, as we are only interested in coefficients and sds.
-
-```{r}
-install.packages("MVLM")
-library("MVLM")
-```
-
-I am not sure that 'y.rsq' retuns the sds. This is what the documentation state about it: "A matrix containing in its first row the overall variance explained by the model
-for variable comprising Y (columns). The remaining rows list the variance of
-each outcome that is explained by the conditional effect of each predictor"
-
-```{r}
-# example from the documentation: 
-
-data(mvlmdata)
-Y <- as.matrix(Y.mvlm)
-# Main effects model
-mvlm.res <- mvlm(Y ~ Cont + Cat + Ord, data = X.mvlm)
-print("are this sds?")
-print(mvlm.res$y.rsq)
-
-print("coefficients")
-print(mvlm.res$beta.hat)
-```
-
-I do not see this interesting to us: 
-
-```{r}
-summary(mvlm.res)
-```
-
-```{r}
-summary(lm(m1[,1]~m2))
-```
-
-
-
-# Impact Functions
-
-I will start coding the function impacts(Y,X) which would compute the impacts directly from data. Features:
-
-- Personalised V bases
-
-Later I will add the following features:
-
-- specifying B (coefficients matrix)
-- adding total option
-
-It will return a matrix with the computed impacts and then we can start thinking in constructing a report.
-
-Just to be clear, this is the explanation: (if it is, I will translate it properly here)
-
-![Explanation of Impacts](/Users/ivanrendobarreiro/coda/img/explanation_impact.jpg)
-Therefore, first, I need a function to compute $\mathbb{E}^\oplus Y = \left(b_0\right) \oplus \left(B_1\boxdot X_1 \oplus ...\oplus B_Q \boxdot X_Q\right) \oplus \left(b_1\odot Z_1 \oplus ... \oplus b_K\odot Z_K\right)$
-
-(I believe I can skip this -I have problems with the matrix multiplication- and comupte E(Y) in the ilr space and transform it to the simplex.)
-
-
-```{r} 
-## NOT USED
-yx_impact_data = function(Y,X,Z=list(matrix()),V=list(matrix()), constant=TRUE){
-  res = ilr_yx_reg(Y,X,Z,V,constant)
-  B = res$B_coord
-  tx = res$X_coord
-  Bsimplex = res$B_simplex
-  exp_Yilr = tx%*%B # fitted values
-  Vy = attr(B,"contrast")[[1]]
-  exp_Y_simplex = inverseilr(exp_Yilr,Vy)
-  I_D = diag(dim(exp_Y_simplex)[2])
-  N=dim(exp_Y_simplex)[1]
-  impacts = list()
-  for (i in (1:N)){
-    W_i = I_D - matrix(1,dim(exp_Y_simplex)[2],1)%*%exp_Y_simplex[i,]
-    imp_i = W_i%*%t(Bsimplex)
-    impacts[[i]] = t(imp_i)
-  }
-  return(impacts)
-}
-```
-
-It returns one matrix for each observation:
-
-```{r}
-m1 = example_matrices()[[1]]
-m2 = example_matrices()[[2]]
-m3 = example_matrices()[[3]]
-m4 = example_matrices()[[4]]
-m5 = example_matrices()[[5]]
-```
-
-```{r}
-m2
-```
-
-
-```{r}
-yx_impact_data(Y=m1,X=list(m2))
-```
-
-Here impacts for a specific B (mat of coef.). First, I need a function to transform B into B* and another from B to B*
-
-```{r}
-## NOT USED
-bstar2b = function(Bstar,Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE){ # Bstar is the sp. B*, Y,X,Z in the simplex
-  input = var2ilr(Y,X,Z,V,constant)
-  ty = input$Y
-  tx = input$X
-  constant = input$constant
-  V = input$V
-  
-  # take the base matrix in B if it exists
-  
-  if (!is.null(attr(Bstar,"contrast"))){
-    V = attr(Bstar,"contrast")
-  }
-  
-  Bs = t(matrix(numeric(dim(Y)[2])))
-  if (constant==TRUE){
-    b0=inverseilr(t(Bstar[1,]),V[[1]])
-    Bs = rbind(Bs, b0)
-  }
-  h=2
-  for (i in 1:length(X)){
-    if (is.null(attr(X[[i]],"space"))){dimx = dim(X[[i]])[2]} #number of parts of this variable i of X D parts --> D-1 param in the ilr 
-    if (!is.null(attr(X[[i]],"space"))){
-      if (attr(X[[i]],"space")=="simplex"){
-        dimx = dim(X[[i]])[2]
-      }
-      else{dimx = dim(X[[i]])[2]+1}
-    }
-    if (h==(h+dimx-2)){matrix_x = t(matrix(Bstar[h,]))}
-    if (h!=(h+dimx-2)){matrix_x = Bstar[h:(h+dimx-2),] }
-    B_q = V[[1]]%*%t(matrix_x)%*%t(V[[i+1]])
-    Bs= rbind(Bs, t(B_q))
-    h=h+dimx-1
-  }
-  
-  
-  if (!is.na(Z[[1]][1,1])){
-    for (i in 1:length(Z)){
-      dimz = dim(Z[[i]])[2]
-      if (h==(h+dimz-1)){matrix_z = t(matrix(Bstar[h,]))}
-      if (h!=(h+dimz-1)){matrix_z = Bstar[h:(h+dimz-1),]} # it is non comp, it does not lose a dimension in the transformation
-      h=h+dimz-1
-      c_k = inverseilr(matrix_z, V[[1]])
-      Bs = rbind(Bs, c_k)
-    }
-  }
-  Bs = Bs[-1,]
-  attr(Bstar,"space")="ilr_coord"
-  attr(Bstar,"contrast") = V
-  
-  attr(tx,"space") = "ilr_coord"
-  attr(tx,"contrast") = V[-1]
-  
-  attr(Bs,"space")="simplex"
-  return(Bs)
-  
-}
-```
-
-We can test that the function works fine:
-
-```{r}
-Btest = ilr_yx_reg(Y=m1,X=list(m2))$B_coord
-bstar2b(Btest,m1,list(m2))
-```
-
-```{r}
-ilr_yx_reg(Y=m1,X=list(m2))$B_simplex
-```
-
-
-I am using the following equations to change the space of B and B*:
-
-$B = V_LB^*V'_D$
-$B^* = V'_LBV_D$
-
-
-```{r}
-## NOT USED
-yx_impact_coef = function(Y,X,Z=list(matrix()),V=list(matrix()), constant=TRUE, B, Bspace="coord"){ #Bspace could be 'coord' or 'simplex' and specifies which kind of matrix of coefficients is given.
-  
-  # if Bspace = simplex: transform to B*, get EY*, transform to EY and get the impacts with EY and B in the simplex
-  
-  if (Bspace =="simplex"){
-    Bs = matrix(0,1,dim(Y)[2]-1)
-    res = ilr_yx_reg(Y,X,Z,V,constant)
-    tx = res$X_coord
-    if (is.na(V[[1]][1,1])){
-      V = attr(res$B_coord, "contrast")
-      print(V)
-    }
-    
-    h=1
-    if (constant){
-      b0s = ilr(t(matrix(B[1,])))
-      h=h+1
-      Bs = rbind(Bs, b0s)
-    }
-    
-    for (i in 1:length(X)){
-      dimx = dim(X[[i]])[2]
-      Bq = B[h:(h+dimx-1),]
-      Bqs = t(V[[1]])%*%t(Bq)%*%V[[i+1]]
-      h=h+dimx
-      Bs = rbind(Bs, t(Bqs))
-    }
-    if (!is.na(Z[[1]][1,1])){
-      for (i in 1:length(Z)){
-        dimz = dim(Z[[i]])[2]
-        bz = B[h:(h+dimz-1),]
-        bzs = ilr(bz,V[[1]])
-        h=h+dimz
-        Bs = rbind(Bs, bzs)
-      }
-    }
-    Bs = Bs[-1,] # this is the B* matrix (until here it works well - checked)
-    exp_Yilr = tx%*%Bs
-    exp_Y_simplex = inverseilr(exp_Yilr,V[[1]])
-    I_D = diag(dim(exp_Y_simplex)[2])
-    N=dim(exp_Y_simplex)[1]
-    Bsimplex = B
-    impacts = list()
-    for (i in (1:N)){
-      W_i = I_D - matrix(1,dim(exp_Y_simplex)[2],1)%*%exp_Y_simplex[i,]
-      imp_i = W_i%*%t(Bsimplex)
-      impacts[[i]] = t(imp_i)
-      }
-    return(impacts)
-  }
-  
-  
-  # if Bspace = ilr: i) compute EY*, transform to EY, get B* -> B and get the impacts with EY and B in the simplex
-  
-  if (Bspace=="coord"){
-    res = ilr_yx_reg(Y,X,Z,V,constant)
-    tx = res$X_coord
-    if (!is.null(attr(B,"contrast"))){
-      V=attr(B,"contrast")
-    }
-    if (is.null(attr(B,"contrast"))){
-      if (is.na(V[[1]][1,1])){
-        stop("A base V should be provided when the input is the matrix of coefficients in the ILR space.")
-      }
-    }
-    exp_Yilr = tx%*%B
-    Vy = attr(B,"contrast")[[1]]
-    exp_Y_simplex = inverseilr(exp_Yilr,Vy)
-    I_D = diag(dim(exp_Y_simplex)[2])
-    N=dim(exp_Y_simplex)[1]
-    Bsimplex = bstar2b(B,Y,X,Z,V,constant)
-    impacts = list()
-    for (i in (1:N)){
-      W_i = I_D - matrix(1,dim(exp_Y_simplex)[2],1)%*%exp_Y_simplex[i,]
-      imp_i = W_i%*%t(Bsimplex)
-      impacts[[i]] = t(imp_i)
-      }
-    return(impacts)
-  }
-}
-```
-
-In this example, performing 'yx_impact_coef' from B_ilr or B_simplex or 'yx_impact_data' should return the same results, as the matrices of coeff in the ilr and simplex space are the same that it is computed internally in 'yx_impact_data'.
-
-```{r}
-m1 = example_matrices()[[1]]
-m2 = example_matrices()[[2]]
-m3 = example_matrices()[[3]]
-m4 = example_matrices()[[4]]
-m5 = example_matrices()[[5]]
-```
-
-```{r}
-# matrices for the example
-
-Btestsimplex = ilr_yx_reg(Y=m1, X=list(m2), Z=list(m5))$B_simplex
-Btestilr     = ilr_yx_reg(Y=m1, X=list(m2), Z=list(m5))$B_coord
-```
-
-
-```{r}
-# impacts having a specific B (in the simplex)
-
-yx_impact_coef(Y=m1,X=list(m2), Z=list(m5), B=Btestsimplex, Bspace="simplex")
-```
-
-
-```{r}
-# impacts having a specific B* (in the ilr)
-yx_impact_coef(Y=m1,X=list(m2), Z=list(m5), B=Btestilr, Bspace="coord")
-```
-
-```{r}
-# impacts directly from data
-yx_impact_data(Y=m1,X=list(m2), Z=list(m5))
-```
-
-```{r}
-ilr_yx_reg(m1,list(m2))
-```
-
-
-#### yx-Impact function from results of the regression
+## yx impacts (ilr)
 
 ```{r}
 ilr_yx_impacts = function(results){ # the unique argument is the anmes list that comes from the ilr_yx_reg function
+    if (attr(results,"transformation")=="ALR"){stop("You are using results from a regression computed used an ALR transformation. Please use 'alr_yx_impacts' function instead. At the end, both results on impacts should be equal.")}
     tx = results$X_coord
     B = results$B_coord
     exp_Yilr = tx%*%B
@@ -1458,13 +917,18 @@ ilr_yx_impacts = function(results){ # the unique argument is the anmes list that
       W_i = I_D - matrix(1,dim(exp_Y_simplex)[2],1)%*%exp_Y_simplex[i,]
       imp_i = W_i%*%t(Bsimplex)
       impacts[[i]] = t(imp_i)
-      }
+    }
     return(impacts)
 }
 ```
 
+## yx impacts (alr)
+
+the thing is that from alr results it is needed to use alr_yx_impacts and ilr_yx_impacts is a problem
+
 ```{r}
 alr_yx_impacts = function(results){ # the unique argument is the named list that comes from the alr_yx_reg function
+    if (attr(results,"transformation")=="ILR"){stop("You are using results from a regression computed used an ILR transformation. Please use 'ilr_yx_impacts' function instead. At the end, both results on impacts should be equal.")}
     tx = results$X_coord
     B = results$B_coord
     exp_Yilr = tx%*%B
@@ -1483,23 +947,7 @@ alr_yx_impacts = function(results){ # the unique argument is the named list that
 }
 ```
 
-THEY ARE EQUAL!!! :)
-
-```{r}
-ilr_yx_impacts(ilr_yx_reg(m1,list(m2)))
-```
-
-```{r}
-alr_yx_impacts(alr_yx_reg(m1,list(m2)))
-```
-
-
-
-## X-Regression and X-impacts (ALR PART NEW)
-
-### x_reg
-
-#### ilr_x_reg
+## ILR x reg
 
 ```{r}
 ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
@@ -1596,7 +1044,10 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbos
   
   attr(Bs,"space")="simplex"
   
-  if (!pres){return(list(Y_coord = ty, constant = constant, X_coord = tx, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov))} # return results if not pres
+  reslist = list(Y_coord = ty, constant = constant, X_coord = tx, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov)
+  attr(reslist, "transformation") = "ILR"
+  
+  if (!pres){return(reslist)} # return results if not pres
   
   
   # till here
@@ -1688,22 +1139,25 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbos
 ```
 
 
-```{r}
-ilr_x_reg(m1,list(m2),list(m5),pres=TRUE)
-```
-
-#### alr case
+## ALR x reg
 
 ```{r}
-alr_x_reg = function(Y,X,Z=list(matrix()),R=list(matrix()),constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
+alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
 # pres = TRUE toprint with a better presentation (name of variables and sd if it is the case) of B and B*.
   
   ty = Y #already in coordinates
-  if (is.na(R[[1]])){
+  if (is.null(R[[1]])){
     for (i in 1:length(X)){
       R[[i]] = dim(X[[i]])[2]
+      X[[i]]=permutation_D(X[[i]],R[[i]])
     }
   }
+  
+  else{
+    for (i in 1:length(X)){
+      X[[i]]=permutation_D(X[[i]],R[[i]])
+      }
+    }
   
   tx = matrix(numeric(dim(X[[1]])[1]))+1 # here it is created a matrix which is a vector of ones (should be removed afterwords if c=False)
   for (i in 1:length(X)){
@@ -1764,6 +1218,7 @@ alr_x_reg = function(Y,X,Z=list(matrix()),R=list(matrix()),constant=TRUE, verbos
     if (h==(h+dimx-2)){matrix_x = t(matrix(Bstar[h,]))}
     if (h!=(h+dimx-2)){matrix_x = Bstar[h:(h+dimx-2),] }
     B_q = t(matrix_x)%*%F_D(dimx)
+    B_q = inv_permutation_D(B_q,R[[i]])
     Bs= rbind(Bs, t(B_q))
     h=h+dimx-1
     if (verbose){print(t(B_q))}
@@ -1791,7 +1246,9 @@ alr_x_reg = function(Y,X,Z=list(matrix()),R=list(matrix()),constant=TRUE, verbos
   
   attr(Bs,"space")="simplex"
   
-  if (!pres){return(list(Y_coord = ty, constant = constant, X_coord = tx, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, xdim=xdimlist))} # return results if not pres
+  reslist = list(Y_coord = ty, constant = constant, X_coord = tx, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, xdim=xdimlist)
+  attr(reslist,"transformation") = "ALR"
+  if (!pres){return(reslist)} # return results if not pres
   
   
   # till here
@@ -1882,14 +1339,11 @@ alr_x_reg = function(Y,X,Z=list(matrix()),R=list(matrix()),constant=TRUE, verbos
 }
 ```
 
-
-
-### x_impacts
-
-Apparently, it works
+## ilr_x_impacts
 
 ```{r}
 ilr_x_impacts = function(results){ # the unique argument is the anmes list that comes from the ilr_yx_reg function
+    if (attr(results,"transformation")=="ALR"){stop("You are using results from a regression computed used an ALR transformation. Please use 'alr_x_impacts' function instead. At the end, both results on impacts should be equal.")}
     B = results$B_coord
     constant = results$constant
     Vx = attr(B,"contrast")
@@ -1912,9 +1366,11 @@ ilr_x_impacts = function(results){ # the unique argument is the anmes list that 
 }
 ```
 
+## alr_x_impacts
 
 ```{r}
 alr_x_impacts = function(results){ # the unique argument is the named list that comes from the ilr_yx_reg function
+    if (attr(results,"transformation")=="ILR"){stop("You are using results from a regression computed used an ILR transformation. Please use 'ilr_x_impacts' function instead. At the end, both results on impacts should be equal.")}
     B = results$B_coord
     constant = results$constant
     listxdim = results$xdim
@@ -1938,32 +1394,7 @@ alr_x_impacts = function(results){ # the unique argument is the named list that 
 }
 ```
 
-```{r}
-alr_x_impacts(alr_x_reg(m1,list(m2,m4)))
-```
-
-```{r}
-ilr_x_impacts(ilr_x_reg(m1,list(m2,m4)))
-```
-
-THEY ARE EQUAL!!!!! :)
-
-
-It works. Each matrix of the list is: $\dfrac{\partial \mathbb E \check Y}{\partial\log\check X_i}=V^{X_i}b^*_i$ for $i$ the i-th explanatory compositional variable.
-
-
-
-
-
-```{r}
-ilr_x_impacts(ilr_x_reg(m1,list(m2,m4)))
-```
-
-```{r}
-ilr_x_impacts(ilr_x_reg(m3,list(m2,m4)))
-```
-
-## Y-impact functions (ALR PART NEW)
+## ilr_y_reg
 
 ```{r}
 ilr_y_reg = function(Y,X,V=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
@@ -2057,6 +1488,14 @@ ilr_y_reg = function(Y,X,V=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
       }
     }
     
+    if (!is.na(Z[[1]][1,1])){
+      for (i in 1:length(Z)){
+        for (j in 1:(dim(Z[[i]])[2])){
+           rname = c(rname, paste("Z",i,j,sep="_"))
+        }
+      }
+    }
+    
     rownames(dfsimplex)=rname
     
     cnames = c()
@@ -2072,10 +1511,20 @@ ilr_y_reg = function(Y,X,V=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
         rname = c(rname, paste("X",i,j,sep="_"))
           }
         }
+    
+    if (!is.na(Z[[1]][1,1])){
+      for (i in 1:length(Z)){
+        for (j in 1:(dim(Z[[i]])[2])){
+           rname = c(rname, paste("Z",i,j,sep="_"))
+        }
+      }
+    }
 
-
+    
     # B star and sds
     dfilr = data.frame(Bstar)
+    
+    
     
     # sds
     dimilr = dim(Y)[2]-1
@@ -2107,6 +1556,7 @@ ilr_y_reg = function(Y,X,V=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
 }
 ```
 
+## alr_y_reg
 
 ```{r}
 alr_y_reg = function(Y,X,R=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
@@ -2182,27 +1632,88 @@ alr_y_reg = function(Y,X,R=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
   
   # part of PRES = TRUE
   
-  if (pres=="IN_PROGRESS"){print("SORRY")}
+    if (pres=="TRUE"){
+    dfsimplex = data.frame(Bs)
+    name=c()
+    for (i in 1:(dim(Y)[2])){
+      name = c(name, paste("Y_", i, sep=""))
+    }
+    colnames(dfsimplex)=name
+    
+    rname = c()
+    if (constant){rname = c(rname, "intercept")}
+    for (i in 1:length(X)){
+      for (j in 1:(dim(X[[i]])[2])){
+        rname = c(rname, paste("X",i,j,sep="_"))
+      }
+    }
+    
+    if (!is.na(Z[[1]][1,1])){
+      for (i in 1:length(Z)){
+        for (j in 1:(dim(Z[[i]])[2])){
+           rname = c(rname, paste("Z",i,j,sep="_"))
+        }
+      }
+    }
+    
+    rownames(dfsimplex)=rname
+    
+    cnames = c()
+    for (i in (1:(dim(Y)[2]-1))){
+      cnames = c(cnames, paste("Yilr_",i,sep=""))
+      cnames = c(cnames, paste("(sd_Yilr_",i,")",sep=""))
+    }
+    
+    rname = c()
+    if (constant){rname = c(rname, "intercept")}
+    for (i in 1:length(X)){
+      for (j in 1:(dim(X[[i]])[2]-1)){
+        rname = c(rname, paste("X",i,j,sep="_"))
+          }
+        }
+    
+    if (!is.na(Z[[1]][1,1])){
+      for (i in 1:length(Z)){
+        for (j in 1:(dim(Z[[i]])[2])){
+           rname = c(rname, paste("Z",i,j,sep="_"))
+        }
+      }
+    }
+
+    # B star and sds
+    dfilr = data.frame(Bstar)
+    
+    # sds
+    dimilr = dim(Y)[2]-1
+    nc = dim(dfilr)[1]
+    for (i in dimilr:1){
+      if (i==dimilr){dfilr = cbind(dfilr,matrix(nrow=nc))}
+      else{
+        dfilr = cbind(dfilr[,1:i],matrix(nrow=nc),dfilr[,(i+1):(dim(dfilr)[2])])
+      }
+    }
+    
+    dfilr = t(dfilr)
+    
+    for (i in 1:(dim(bcov)[1])){
+      dfilr[2*i] = sqrt(bcov[i,i]) # standard deviation as sqrt of var
+    }
+    dfilr = t(dfilr)
+    
+    rownames(dfilr) = rname
+    colnames(dfilr) = cnames
+    
+    
+    print("      B (COEFFICIENTS IN THE SIMPLEX):      ")
+    print(as.matrix(dfsimplex))
+    print("--------------------------------------------")
+    print("     B* (COEF. and SD IN THE ILR SPACE):    ")
+    print(as.matrix(dfilr))
+  }
 }
 ```
 
-
-OLD ISSUE: I have tried to compute the ilr and alr reg using a comp. variable as an explanatory and therefore, I had exact colinearity ---> disaster. Be careful with that. Here it is fixed multiplying each column by a different number:
-
-```{r}
-m4c1 = matrix(m4[,1])*10
-m4c2 = matrix(m4[,2])*2
-```
-
-```{r}
-alr_y_reg(m1,list(m4c1))$B_simplex
-```
-
-```{r}
-ilr_y_reg(m1,list(m4),pres=TRUE)
-```
-
-### ilr_y_impacts
+## ILR y impacts
 
 ```{r}
 ilr_y_impacts = function(results){ #results argument regers to the output of ilr_y_reg
@@ -2223,15 +1734,7 @@ ilr_y_impacts = function(results){ #results argument regers to the output of ilr
 ```
 
 
-```{r}
-ilr_y_impacts(ilr_y_reg(m1,list(m3,m5)))
-```
-
-```{r}
-P_D = function(D){
-  return(rbind(diag(D-1),numeric(D-1)))
-}
-```
+## ALR y impacts 
 
 ```{r}
 alr_y_impacts = function(results){ #results argument regers to the output of ilr_y_reg
@@ -2253,315 +1756,6 @@ alr_y_impacts = function(results){ #results argument regers to the output of ilr
 ```
 
 
-```{r}
-alr_y_impacts(alr_y_reg(m1,list(m3,m5)))
-```
 
-
-WORKS! :)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-I will try this functions in a large dataset, if they work, I'll compute some tiny example by hand. The large dataset is the 'BDDSegX_ext.RData' dataset.
-
-(The regressions performed do not follow any criterion)
-
-```{r}
-load(file = "/Users/ivanrendobarreiro/Documents/m1_econometrics/internship/week1/data_db/BDDSegX_ext.RData")
-```
-
-```{r}
-BDDSegX
-```
-
-SimS_A, SimS_B, SimS_C, SimS_D, SimS_E form the unique compositional variable: not possible to test yx-model but yx-model features the most developed code of the three models, so I simulate it.
-
-I'll simulate a 3 part variable.
-
-```{r}
-N = 152
-x1 = rnorm(N, mean=100, sd=30)
-x2 = rnorm(N, mean=90, sd=25)
-x3 = rnorm(N, mean=95, sd=20)
-new = cbind(matrix(x1),x2,x3)
-new = closure(new) # these are a D=2 new variable
-```
-
-other variables:
-
-TTC_SP98 
-Immat_neuf_VP
-
-```{r}
-m1 = matrix(BDDSegX$Immat_neuf_VP)
-m2 = matrix(BDDSegX$PIB_Courant_t)
-mc = BDDSegX[,c("SimS_A","SimS_B","SimS_C","SimS_D","SimS_E")]
-```
-
-
-
-
-### x model
-
-```{r}
-resx = ilr_x_reg(Y = m1, X = list(mc,new), Z=list(m2))
-ilr_x_impacts(resx) 
-```
-
-### y model
-
-```{r}
-resy = ilr_y_reg(Y = mc, X = list(m1,m2))
-ilr_y_impacts(resy)[1:3] # there are a lot of impacts
-```
-
-### yx model
-
-```{r}
-resyx = ilr_yx_reg(Y = mc, X = list(new), Z=list(m1,m2))
-ilr_y_impacts(resyx)[1:3] # there are a lot of impacts
-```
-
-Ill plot it, I would like to see them.
-
-```{r}
-imp_test = ilr_y_impacts(resyx)
-ts1=numeric(length(imp_test))
-ts2=numeric(length(imp_test))
-ts3=numeric(length(imp_test))
-for (i in 1:length(imp_test)){
-  ts1[i]=imp_test[[i]][1,1] # the first element of the first column, for example
-  ts2[i]=imp_test[[i]][4,5] # and the 4,5 
-}
-```
-
-```{r}
-plot(ts1,type="l",col="blue",ylim=c(-5,5))
-lines(ts2, col="red")
-```
-
-They are such as I would expect. :)
-
-# Visualisation (NEW)
-Using the 
-
-## X-Compo
-
-```{r}
-#ilr_x_reg(Y = new, X = list(mc,new), Z=list(m2)) |>
-#x_impacts()
-```
-
-
-## Y-Compo
-
-
-```{r}
-# impacts of m2 in new (simulated data)
-
-impacttest = alr_y_reg(Y = mc, X = list(m2)) |>
-  ilr_y_impacts() 
-
-dftest = data.frame(t(matrix(impacttest[[1]][2,])))
-for (i in 2:length(impacttest)){
-  dftest = rbind(dftest, impacttest[[i]][2,])
-}
-
-impacttest[1:5]
-```
-
-
-```{r}
-heatmap(as.matrix(dftest),Colv = NA, Rowv = NA,col=heat.colors(1000))
-```
-
-??? With alr this is not possible to compute, but it is with ilr due to the characteristics of data: it is needed to warn about this.
-
-```{r}
-m1 = example_matrices()[[1]]
-m3 = example_matrices()[[3]]
-m5 = example_matrices()[[5]]
-```
-
-
-
-```{r}
-impacttest = ilr_y_impacts(ilr_y_reg(m1,list(m3,m5)))
-
-dftest = data.frame(t(matrix(impacttest[[1]][3,])))
-for (i in 2:length(impacttest)){
-  dftest = rbind(dftest, impacttest[[i]][3,])
-}
-dftest
-```
-
-```{r}
-my_col <- RColorBrewer::brewer.pal(9, "RdBu") ############# <------ I BELIEVE THIS IS THE IMPORTANT THING! 
-#pdf("figures/elasticities_1.pdf", width = 8, height = 8)
-heatmap(as.matrix(dftest), Rowv = NA, Colv = NA, scale = "none",
-        main = "", col = my_col)
-#dev.off()
-```
-
-## YX-COMP
-
-My proposal for SMALL DATA: Matrix of heatmaps
-
-
-```{r}
-m1 = example_matrices()[[1]]
-m2 = example_matrices()[[2]]
-
-impacttest2 = ilr_yx_impacts(ilr_yx_reg(m1,list(m2)))
-
-dftest1 = data.frame(t(matrix(impacttest2[[1]][2,])))
-for (i in 2:length(impacttest2)){
-  dftest1 = rbind(dftest1, impacttest2[[i]][2,])
-}
-dftest2 = data.frame(t(matrix(impacttest2[[1]][3,])))
-for (i in 2:length(impacttest2)){
-  dftest2 = rbind(dftest2, impacttest2[[i]][3,])
-}
-dftest3 = data.frame(t(matrix(impacttest2[[1]][4,])))
-for (i in 2:length(impacttest2)){
-  dftest3 = rbind(dftest3, impacttest2[[i]][4,])
-}
-dftest4 = data.frame(t(matrix(impacttest2[[1]][5,])))
-for (i in 2:length(impacttest2)){
-  dftest4 = rbind(dftest4, impacttest2[[i]][5,])
-}
-
-dftest = rbind(dftest1,dftest2,dftest3,dftest4)
-
-heatmap(as.matrix(dftest), Rowv = NA, Colv = NA, scale = "none",
-        main = "My proposal for small data", col = my_col)
-```
-
-My proposal for BIG DATA: (here these are histograms, but they can be any representation of the distribution of the impacts, boxplots... etc). These look a bit weird because this is a small data case.
-
-
-```{r,fig.height=10,fig.width=8}
-par(mfrow=c(4,3))
-# Add a Normal Curve (Thanks to Peter Dalgaard)
-x <- dftest1$X1
-h<-hist(x, breaks=10,main="Y1")
-
-xfit<-seq(min(x),max(x),length=40)
-yfit<-dnorm(xfit,mean=mean(x),sd=sd(x))
-yfit <- yfit*diff(h$mids[1:2])*length(x)
-lines(xfit, yfit, col="blue", lwd=2)
-
-x <- dftest1$X2
-h<-hist(x, breaks=10, main="Y2",ylab="")
-xfit<-seq(min(x),max(x),length=40)
-yfit<-dnorm(xfit,mean=mean(x),sd=sd(x))
-yfit <- yfit*diff(h$mids[1:2])*length(x)
-lines(xfit, yfit, col="blue", lwd=2)
-
-x <- dftest1$X3
-h<-hist(x, breaks=10, main="Y3",ylab="")
-xfit<-seq(min(x),max(x),length=40)
-yfit<-dnorm(xfit,mean=mean(x),sd=sd(x))
-yfit <- yfit*diff(h$mids[1:2])*length(x)
-lines(xfit, yfit, col="blue", lwd=2)
-
-## 
-
-x <- dftest2$X1
-h<-hist(x, breaks=10, main="Y1")
-xfit<-seq(min(x),max(x),length=40)
-yfit<-dnorm(xfit,mean=mean(x),sd=sd(x))
-yfit <- yfit*diff(h$mids[1:2])*length(x)
-lines(xfit, yfit, col="blue", lwd=2)
-
-x <- dftest2$X2
-h<-hist(x, breaks=10, main="Y2",ylab="")
-xfit<-seq(min(x),max(x),length=40)
-yfit<-dnorm(xfit,mean=mean(x),sd=sd(x))
-yfit <- yfit*diff(h$mids[1:2])*length(x)
-lines(xfit, yfit, col="blue", lwd=2)
-
-x <- dftest2$X3
-h<-hist(x, breaks=10, main="Y3",ylab="")
-xfit<-seq(min(x),max(x),length=40)
-yfit<-dnorm(xfit,mean=mean(x),sd=sd(x))
-yfit <- yfit*diff(h$mids[1:2])*length(x)
-lines(xfit, yfit, col="blue", lwd=2)
-
-##
-
-x <- dftest3$X1
-h<-hist(x, breaks=10, main="Y1")
-xfit<-seq(min(x),max(x),length=40)
-yfit<-dnorm(xfit,mean=mean(x),sd=sd(x))
-yfit <- yfit*diff(h$mids[1:2])*length(x)
-lines(xfit, yfit, col="blue", lwd=2)
-
-x <- dftest3$X2
-h<-hist(x, breaks=10, main="Y2",ylab="")
-xfit<-seq(min(x),max(x),length=40)
-yfit<-dnorm(xfit,mean=mean(x),sd=sd(x))
-yfit <- yfit*diff(h$mids[1:2])*length(x)
-lines(xfit, yfit, col="blue", lwd=2)
-
-x <- dftest3$X3
-h<-hist(x, breaks=10, main="Y3",ylab="")
-xfit<-seq(min(x),max(x),length=40)
-yfit<-dnorm(xfit,mean=mean(x),sd=sd(x))
-yfit <- yfit*diff(h$mids[1:2])*length(x)
-lines(xfit, yfit, col="blue", lwd=2)
-
-##
-
-x <- dftest4$X1
-h<-hist(x, breaks=10, main="Y1")
-xfit<-seq(min(x),max(x),length=40)
-yfit<-dnorm(xfit,mean=mean(x),sd=sd(x))
-yfit <- yfit*diff(h$mids[1:2])*length(x)
-lines(xfit, yfit, col="blue", lwd=2)
-
-x <- dftest4$X2
-h<-hist(x, breaks=10, main="Y2",ylab="")
-xfit<-seq(min(x),max(x),length=40)
-yfit<-dnorm(xfit,mean=mean(x),sd=sd(x))
-yfit <- yfit*diff(h$mids[1:2])*length(x)
-lines(xfit, yfit, col="blue", lwd=2)
-
-x <- dftest4$X3
-h<-hist(x, breaks=10, main="Y3",ylab="")
-xfit<-seq(min(x),max(x),length=40)
-yfit<-dnorm(xfit,mean=mean(x),sd=sd(x))
-yfit <- yfit*diff(h$mids[1:2])*length(x)
-lines(xfit, yfit, col="blue", lwd=2)
-
-```
-
-Some elements are redundant (Y1, Y2, Y3) in the 2-4 rows and some are needed (X1,...,X4 in the right, one for each row)
-In general, it could be improved "easily". This is just the idea. The aim is to have a plot where impacts can be compared easily as X_1 impact on Y_1 can be compared both to X_2 impact on Y_1 and X_1 impact on Y_2 moving through rows or columns.
-
-However, if D or P (compo parts of Y and X respectively) are large enough, we have a problem. (I hope this does not occurs)
 
 
