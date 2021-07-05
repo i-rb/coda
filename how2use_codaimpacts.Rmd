@@ -30,6 +30,7 @@ m4 = example_matrices()[[4]]
 m5 = example_matrices()[[5]]
 ```
 
+
 ```{r}
 # this is to delete the past elements in the enviroment
 rm(list = ls())
@@ -409,8 +410,8 @@ ilr_yx_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbo
   attr(resid,"space") = NULL
   attr(resid,"contrast") = NULL
   
-  reslist = list(Y_coord = ty, X_coord = tx, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
-  attr(reslist,"transformation") = "ILR"
+  reslist = list(Y_coord = ty, X_coord = tx, constant = constant, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
+  attr(reslist,"reg_type") = "ilr_yx_reg"
   
   if (!pres){return(reslist)} # return results if not pres
   
@@ -499,7 +500,8 @@ ilr_yx_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbo
     print("     B* (COEF. and SD IN THE ILR SPACE):    ")
     print(as.matrix(dfilr))
     print("--------------------------------------------")
-    print(paste("SSR: ", sum(resid^2), sep="")) # sum of squared residuals
+    print(paste("n obs  : ", dim(tx)[1], sep="")) 
+    print(paste("SSR    : ", sum(resid^2), sep="")) # sum of squared residuals
   }
 }
 ```
@@ -806,8 +808,8 @@ alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=F
   attr(resid,"space") = NULL
   attr(resid,"contrast") = NULL
   
-  reslist = list(Y_coord = ty, X_coord = tx, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
-  attr(reslist,"transformation") = "ALR"
+  reslist = list(Y_coord = ty, X_coord = tx, constant = constant, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
+  attr(reslist,"reg_type") = "alr_yx_reg"
   if (!pres){return(reslist)} # return results if not pres
   
   
@@ -894,7 +896,8 @@ alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=F
     print("     B* (COEF. and SD IN THE COORDINATES):    ")
     print(as.matrix(dfalr))
     print("--------------------------------------------")
-    print(paste("SSR: ", sum(resid^2), sep="")) # sum of squared residuals
+    print(paste("n obs  : ", dim(tx)[1], sep="")) 
+    print(paste("SSR    : ", sum(resid^2), sep="")) # sum of squared residuals
   }
 }
 ```
@@ -902,8 +905,7 @@ alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=F
 ## yx impacts (ilr)
 
 ```{r}
-ilr_yx_impacts = function(results){ # the unique argument is the anmes list that comes from the ilr_yx_reg function
-    if (attr(results,"transformation")=="ALR"){stop("You are using results from a regression computed used an ALR transformation. Please use 'alr_yx_impacts' function instead. At the end, both results on impacts should be equal.")}
+ilr_yx_impacts = function(results){ # the unique argument is the named list that comes from the ilr_yx_reg function
     tx = results$X_coord
     B = results$B_coord
     exp_Yilr = tx%*%B
@@ -928,7 +930,6 @@ the thing is that from alr results it is needed to use alr_yx_impacts and ilr_yx
 
 ```{r}
 alr_yx_impacts = function(results){ # the unique argument is the named list that comes from the alr_yx_reg function
-    if (attr(results,"transformation")=="ILR"){stop("You are using results from a regression computed used an ILR transformation. Please use 'ilr_yx_impacts' function instead. At the end, both results on impacts should be equal.")}
     tx = results$X_coord
     B = results$B_coord
     exp_Yilr = tx%*%B
@@ -1044,8 +1045,14 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbos
   
   attr(Bs,"space")="simplex"
   
-  reslist = list(Y_coord = ty, constant = constant, X_coord = tx, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov)
-  attr(reslist, "transformation") = "ILR"
+  fittedvalues = tx%*%Bstar
+  resid = ty- fittedvalues
+  attr(resid,"space") = NULL
+  attr(resid,"contrast") = NULL
+  
+  
+  reslist = list(Y_coord = ty, X_coord = tx, constant = constant, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
+  attr(reslist, "reg_type") = "ilr_x_reg"
   
   if (!pres){return(reslist)} # return results if not pres
   
@@ -1134,6 +1141,9 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbos
     print("--------------------------------------------")
     print("     B* (COEF. and SD IN THE ILR SPACE):    ")
     print(as.matrix(dfilr))
+    print("--------------------------------------------")
+    print(paste("n obs  : ", dim(tx)[1], sep="")) 
+    print(paste("SSR    : ", sum(resid^2), sep="")) # sum of squared residuals
   }
 }
 ```
@@ -1246,12 +1256,15 @@ alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FA
   
   attr(Bs,"space")="simplex"
   
-  reslist = list(Y_coord = ty, constant = constant, X_coord = tx, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, xdim=xdimlist)
-  attr(reslist,"transformation") = "ALR"
+  fittedvalues = tx%*%Bstar
+  resid = ty- fittedvalues
+  attr(resid,"space") = NULL
+  attr(resid,"contrast") = NULL
+  
+  reslist = list(Y_coord = ty, constant = constant, X_coord = tx, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues, xdim=xdimlist)
+  attr(reslist,"reg_type") = "alr_x_reg"
   if (!pres){return(reslist)} # return results if not pres
-  
-  
-  # till here
+
   
   # part of PRES = TRUE
   
@@ -1335,6 +1348,9 @@ alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FA
     print("--------------------------------------------")
     print("     B* (COEF. and SD IN THE ALR SPACE):    ")
     print(as.matrix(dfalr))
+    print("--------------------------------------------")
+    print(paste("n obs  : ", dim(tx)[1], sep="")) 
+    print(paste("SSR    : ", sum(resid^2), sep="")) # sum of squared residuals
   }
 }
 ```
@@ -1342,8 +1358,7 @@ alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FA
 ## ilr_x_impacts
 
 ```{r}
-ilr_x_impacts = function(results){ # the unique argument is the anmes list that comes from the ilr_yx_reg function
-    if (attr(results,"transformation")=="ALR"){stop("You are using results from a regression computed used an ALR transformation. Please use 'alr_x_impacts' function instead. At the end, both results on impacts should be equal.")}
+ilr_x_impacts = function(results){ # the unique argument is the named list that comes from the ilr_x_reg function
     B = results$B_coord
     constant = results$constant
     Vx = attr(B,"contrast")
@@ -1366,11 +1381,11 @@ ilr_x_impacts = function(results){ # the unique argument is the anmes list that 
 }
 ```
 
+
 ## alr_x_impacts
 
 ```{r}
 alr_x_impacts = function(results){ # the unique argument is the named list that comes from the ilr_yx_reg function
-    if (attr(results,"transformation")=="ILR"){stop("You are using results from a regression computed used an ILR transformation. Please use 'ilr_x_impacts' function instead. At the end, both results on impacts should be equal.")}
     B = results$B_coord
     constant = results$constant
     listxdim = results$xdim
@@ -1427,7 +1442,7 @@ ilr_y_reg = function(Y,X,V=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
   print(tx)}
   
   Bstar = mlm(ty,tx)
-  # bcov = b_cov(tx,ty,Bstar) ######## some problems here
+  bcov = b_cov(tx,ty,Bstar) 
   Bs = t(matrix(numeric(dim(Y)[2])))
   
   if (verbose){
@@ -1465,10 +1480,17 @@ ilr_y_reg = function(Y,X,V=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
   
   attr(Bs,"space")="simplex"
   
-  if (!pres){return(list(Y_coord = ty, X_coord = tx, B_coord = Bstar, B_simplex = Bs))} 
+  fittedvalues = tx%*%Bstar
+  resid = ty- fittedvalues
+  attr(resid,"space") = NULL
+  attr(resid,"contrast") = NULL
+  
+  
+  list_return = list(Y_coord = ty, X_coord = tx, constant = constant, B_coord = Bstar, B_simplex = Bs, Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
+  attr(list_return, "reg_type") = "ilr_y_reg"
+  
+  if (!pres){return(list_return)} 
 # return results if not pres + Bcoord_cov=bcov
-  
-  
   
   # part of PRES = TRUE
   
@@ -1488,14 +1510,6 @@ ilr_y_reg = function(Y,X,V=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
       }
     }
     
-    if (!is.na(Z[[1]][1,1])){
-      for (i in 1:length(Z)){
-        for (j in 1:(dim(Z[[i]])[2])){
-           rname = c(rname, paste("Z",i,j,sep="_"))
-        }
-      }
-    }
-    
     rownames(dfsimplex)=rname
     
     cnames = c()
@@ -1507,23 +1521,14 @@ ilr_y_reg = function(Y,X,V=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
     rname = c()
     if (constant){rname = c(rname, "intercept")}
     for (i in 1:length(X)){
-      for (j in 1:(dim(X[[i]])[2]-1)){
+      for (j in 1:(dim(X[[i]])[2])){
         rname = c(rname, paste("X",i,j,sep="_"))
           }
         }
-    
-    if (!is.na(Z[[1]][1,1])){
-      for (i in 1:length(Z)){
-        for (j in 1:(dim(Z[[i]])[2])){
-           rname = c(rname, paste("Z",i,j,sep="_"))
-        }
-      }
-    }
 
     
     # B star and sds
     dfilr = data.frame(Bstar)
-    
     
     
     # sds
@@ -1552,6 +1557,9 @@ ilr_y_reg = function(Y,X,V=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
     print("--------------------------------------------")
     print("     B* (COEF. and SD IN THE ILR SPACE):    ")
     print(as.matrix(dfilr))
+    print("--------------------------------------------")
+    print(paste("n obs  : ", dim(tx)[1], sep="")) 
+    print(paste("SSR    : ", sum(resid^2), sep="")) # sum of squared residuals
   }
 }
 ```
@@ -1589,7 +1597,7 @@ alr_y_reg = function(Y,X,R=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
   print(tx)}
   
   Bstar = mlm(ty,tx)
-  # bcov = b_cov(tx,ty,Bstar) ######## some problems here
+  bcov = b_cov(tx,ty,Bstar) 
   Bs = t(matrix(numeric(dim(Y)[2])))
   
   if (verbose){
@@ -1626,13 +1634,22 @@ alr_y_reg = function(Y,X,R=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
   
   attr(Bs,"space")="simplex"
   
-  if (!pres){return(list(Y_coord = ty, X_coord = tx, B_coord = Bstar, B_simplex = Bs))} 
+  fittedvalues = tx%*%Bstar
+  resid = ty- fittedvalues
+  attr(resid,"space") = NULL
+  attr(resid,"contrast") = NULL
+  
+  list_return = list(Y_coord = ty, X_coord = tx, B_coord = Bstar, B_simplex = Bs, Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
+  attr(list_return, "reg_type") = "alr_y_reg"
+  
+  
+  if (!pres){return(list_return)} 
 # return results if not pres + Bcoord_cov=bcov
   
   
-  # part of PRES = TRUE
+# part of PRES = TRUE
   
-    if (pres=="TRUE"){
+if (pres=="TRUE"){
     dfsimplex = data.frame(Bs)
     name=c()
     for (i in 1:(dim(Y)[2])){
@@ -1648,14 +1665,6 @@ alr_y_reg = function(Y,X,R=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
       }
     }
     
-    if (!is.na(Z[[1]][1,1])){
-      for (i in 1:length(Z)){
-        for (j in 1:(dim(Z[[i]])[2])){
-           rname = c(rname, paste("Z",i,j,sep="_"))
-        }
-      }
-    }
-    
     rownames(dfsimplex)=rname
     
     cnames = c()
@@ -1667,21 +1676,15 @@ alr_y_reg = function(Y,X,R=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
     rname = c()
     if (constant){rname = c(rname, "intercept")}
     for (i in 1:length(X)){
-      for (j in 1:(dim(X[[i]])[2]-1)){
+      for (j in 1:(dim(X[[i]])[2])){
         rname = c(rname, paste("X",i,j,sep="_"))
           }
         }
-    
-    if (!is.na(Z[[1]][1,1])){
-      for (i in 1:length(Z)){
-        for (j in 1:(dim(Z[[i]])[2])){
-           rname = c(rname, paste("Z",i,j,sep="_"))
-        }
-      }
-    }
 
+    
     # B star and sds
     dfilr = data.frame(Bstar)
+    
     
     # sds
     dimilr = dim(Y)[2]-1
@@ -1709,6 +1712,9 @@ alr_y_reg = function(Y,X,R=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
     print("--------------------------------------------")
     print("     B* (COEF. and SD IN THE ILR SPACE):    ")
     print(as.matrix(dfilr))
+    print("--------------------------------------------")
+    print(paste("n obs  : ", dim(tx)[1], sep="")) 
+    print(paste("SSR    : ", sum(resid^2), sep="")) # sum of squared residuals
   }
 }
 ```
@@ -1727,7 +1733,8 @@ ilr_y_impacts = function(results){ #results argument regers to the output of ilr
   impacts=list()
   for (i in 1:(dim(EYsimpl)[1])){
     Wi = diag(D) - matrix(1,D,1)%*%t(EYsimpl[i,])
-    impacts[[i]] = t(Wi%*%Vy%*%t(Bcoord))
+    imp = t(Wi%*%Vy%*%t(Bcoord))
+    impacts[[i]] = imp
   }
   return(impacts)
 }
@@ -1755,6 +1762,73 @@ alr_y_impacts = function(results){ #results argument regers to the output of ilr
 }
 ```
 
+
+## general impacts function
+
+```{r}
+impacts = function(results){
+  if (attr(results,"reg_type")=="alr_x_reg"){return(alr_x_impacts(results))}
+  if (attr(results,"reg_type")=="alr_y_reg"){return(alr_y_impacts(results))}
+  if (attr(results,"reg_type")=="alr_yx_reg"){return(alr_yx_impacts(results))}
+  if (attr(results,"reg_type")=="ilr_x_reg"){return(ilr_x_impacts(results))}
+  if (attr(results,"reg_type")=="ilr_y_reg"){return(ilr_y_impacts(results))}
+  if (attr(results,"reg_type")=="ilr_yx_reg"){return(ilr_yx_impacts(results))}
+  else{stop("Input in 'impacts()' function is not a valid output of one of the regression functions.")}
+}
+```
+
+
+## summary for impacts (only for yx and y models. For x models it makes no sense.)
+
+```{r}
+imp_summary = function(impact_values){
+  dim1 = dim(impact_values[[1]])[1]
+  dim2 = dim(impact_values[[1]])[2]
+  maxmat = matrix(0,dim1,dim2)
+  q3mat = matrix(0,dim1,dim2)
+  medmat = matrix(0,dim1,dim2)
+  q1mat = matrix(0,dim1,dim2)
+  minmat = matrix(0,dim1,dim2)
+  for (i in (1:dim1)){
+    for (j in (1:dim2)){
+      values = numeric(length(impact_values))
+      for (k in (1:length(impact_values))){
+        values[k] = impact_values[[k]][i,j]
+      }
+      maxmat[i,j] = max(values)
+      q3mat[i,j] = quantile(values,0.75)
+      medmat[i,j] = quantile(values,0.5)
+      q1mat[i,j] = quantile(values,0.25)
+      minmat[i,j] = min(values)
+    }
+  }
+  print("     SUMMARY OF IMPACTS       ")
+  print("==============================")
+  print("          MAXIMUMS            ")
+  print(maxmat)
+  print("                              ")
+  print("------------------------------")
+  print("         Q3s (0.75)           ")
+  print(q3mat)
+  print("                              ")
+  print("------------------------------")
+  print("          MEDIANS             ")
+  print(medmat)
+  print("                              ")
+  print("------------------------------")
+  print("        Q1s (0.25)            ")
+  print(q1mat)
+  print("                              ")
+  print("------------------------------")
+  print("          MINIMUMS            ")
+  print(minmat)
+  
+}
+```
+
+```{r}
+imp_summary(imptest)
+```
 
 
 
