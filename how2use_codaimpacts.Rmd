@@ -175,7 +175,7 @@ est_var = function(X,Y,B){ # page 146 kevin
 b_cov = function(X,Y,B){
   sig = est_var(X,Y,B)
   cov = kronecker(sig,solve(t(X)%*%X))
-  return(round(cov,5))
+  return(cov)
 }
 ```
 
@@ -323,16 +323,53 @@ var2ilr = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE){
 ```{r}
 # eq 4 ASJ paper (Ngyugen, Laurent, Thomas-Agnan, Ruiz-Gazen)
 
+
 # VERSION 2.0.0 (with attributes and using the var2ilr function)
 
 ilr_yx_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
 # pres = TRUE to print with a better presentation (name of variables and sd if it is the case) of B and B*.
   
+  if (constant){x_col_names = c("intercept")}
+  else{x_col_names = c()}
+  
+  for (i in 1:length(X)){
+    if (is.null(colnames(X[[i]]))){
+      for (j in 1:(dim(X[[i]])[2])){
+        x_col_names = c(x_col_names, paste("X_",i,"_",j,sep=""))
+      }
+    }
+    else{x_col_names = c(x_col_names,colnames(X[[i]]))}
+  }
+  if (!is.na(Z[[1]][1,1])){
+    for (i in 1:length(Z)){
+      if (is.null(colnames(Z[[i]]))){
+      for (j in 1:(dim(Z[[i]])[2])){
+        x_col_names = c(x_col_names, paste("Z_",i,"_",j,sep=""))
+      }
+    }
+      else{x_col_names = c(x_col_names,colnames(Z[[i]]))
+      }
+    }
+  }
+  
+  if (is.null(colnames(Y))){
+    y_col_names = c()
+    for (i in 1:(dim(Y)[2])){
+      y_col_names = c(y_col_names, paste("Y_",i,sep=""))
+    }
+  }
+  else{y_col_names = colnames(Y)}
+  
   input = var2ilr(Y,X,Z,V,constant)
   ty = input$Y
   tx = input$X
+  
+  if (sum(is.na(ty))>0){stop("There are NAs in the Y variable.")}
+  if (sum(is.na(tx))>0){stop("There are NAs in the X variable.")}
+  
   constant = input$constant
   V = input$V
+  
   
   if (dim(ty)[1]<=dim(tx)[2]){
     warning("WARNING: Number of ilr parameters to be estimated greater than sample size \n")
@@ -403,12 +440,14 @@ ilr_yx_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbo
   attr(tx,"space") = "ilr_coord"
   attr(tx,"contrast") = V[-1]
   
-  attr(Bs,"space")="simplex"
   
   fittedvalues = tx%*%Bstar
   resid = ty- fittedvalues
   attr(resid,"space") = NULL
   attr(resid,"contrast") = NULL
+  colnames(Bs) = y_col_names
+  rownames(Bs) = x_col_names
+  attr(Bs,"space")="simplex"
   
   reslist = list(Y_coord = ty, X_coord = tx, constant = constant, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
   attr(reslist,"reg_type") = "ilr_yx_reg"
@@ -714,6 +753,38 @@ inv_permutation_D = function(mat,P){ # undoes the permutation
 alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of reference variables order: (Y, X1, X2, ...) 
 # pres = TRUE to print with a better presentation (name of variables and sd if it is the case) of B and B*.
   
+  if (constant){x_col_names = c("intercept")}
+  else{x_col_names = c()}
+  
+  for (i in 1:length(X)){
+    if (is.null(colnames(X[[i]]))){
+      for (j in 1:(dim(X[[i]])[2])){
+        x_col_names = c(x_col_names, paste("X_",i,"_",j,sep=""))
+      }
+    }
+    else{x_col_names = c(x_col_names,colnames(X[[i]]))}
+  }
+  if (!is.na(Z[[1]][1,1])){
+    for (i in 1:length(Z)){
+      if (is.null(colnames(Z[[i]]))){
+      for (j in 1:(dim(Z[[i]])[2])){
+        x_col_names = c(x_col_names, paste("Z_",i,"_",j,sep=""))
+      }
+    }
+      else{x_col_names = c(x_col_names,colnames(Z[[i]]))
+      }
+    }
+  }
+  
+  if (is.null(colnames(Y))){
+    y_col_names = c()
+    for (i in 1:(dim(Y)[2])){
+      y_col_names = c(y_col_names, paste("Y_",i,sep=""))
+    }
+  }
+  else{y_col_names = colnames(Y)}
+  
+  
   if (!is.null(R[[1]])){
     Y=permutation_D(Y,R[[1]])
     for (j in 1:length(X)){
@@ -728,6 +799,8 @@ alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=F
   
   ty = input$Y
   tx = input$X
+  if (sum(is.na(ty))>0){stop("There are NAs in the Y variable.")}
+  if (sum(is.na(tx))>0){stop("There are NAs in the X variable.")}
   dimy = dim(ty)[2]+1
   constant = input$constant
   
@@ -801,12 +874,14 @@ alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=F
   attr(tx,"space") = "alr_coord"
   attr(tx,"reference") = R[-1]
   
-  attr(Bs,"space")="simplex"
-  
   fittedvalues = tx%*%Bstar
   resid = ty- fittedvalues
   attr(resid,"space") = NULL
   attr(resid,"contrast") = NULL
+  
+  rownames(Bs) = x_col_names
+  colnames(Bs) = y_col_names
+  attr(Bs,"space")="simplex"
   
   reslist = list(Y_coord = ty, X_coord = tx, constant = constant, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
   attr(reslist,"reg_type") = "alr_yx_reg"
@@ -906,6 +981,8 @@ alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=F
 
 ```{r}
 ilr_yx_impacts = function(results){ # the unique argument is the named list that comes from the ilr_yx_reg function
+    x_names = rownames(results$B_simplex)
+    y_names = colnames(results$B_simplex)
     tx = results$X_coord
     B = results$B_coord
     exp_Yilr = tx%*%B
@@ -917,8 +994,10 @@ ilr_yx_impacts = function(results){ # the unique argument is the named list that
     impacts = list()
     for (i in (1:N)){
       W_i = I_D - matrix(1,dim(exp_Y_simplex)[2],1)%*%exp_Y_simplex[i,]
-      imp_i = W_i%*%t(Bsimplex)
-      impacts[[i]] = t(imp_i)
+      imp_i = t(W_i%*%t(Bsimplex))
+      colnames(imp_i) = y_names
+      rownames(imp_i) = x_names
+      impacts[[i]] = imp_i
     }
     return(impacts)
 }
@@ -930,6 +1009,8 @@ the thing is that from alr results it is needed to use alr_yx_impacts and ilr_yx
 
 ```{r}
 alr_yx_impacts = function(results){ # the unique argument is the named list that comes from the alr_yx_reg function
+    x_names = rownames(results$B_simplex)
+    y_names = colnames(results$B_simplex)
     tx = results$X_coord
     B = results$B_coord
     exp_Yilr = tx%*%B
@@ -941,8 +1022,10 @@ alr_yx_impacts = function(results){ # the unique argument is the named list that
     impacts = list()
     for (i in (1:N)){
       W_i = I_D - matrix(1,dim(exp_Y_simplex)[2],1)%*%exp_Y_simplex[i,]
-      imp_i = W_i%*%t(Bsimplex)
-      impacts[[i]] = t(imp_i)
+      imp_i = t(W_i%*%t(Bsimplex))
+      colnames(imp_i) = y_names
+      rownames(imp_i) = x_names
+      impacts[[i]] = imp_i
       }
     return(impacts)
 }
@@ -973,6 +1056,9 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbos
       tx=cbind(tx,z)
     }
   }
+  
+  if (sum(is.na(ty))>0){stop("There are NAs in the Y variable.")}
+  if (sum(is.na(tx))>0){stop("There are NAs in the X variable.")}
   
   if (dim(ty)[1]<=dim(tx)[2]){
     warning("WARNING: Number of ilr parameters to be estimated greater than sample size \n")
@@ -1181,6 +1267,9 @@ alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FA
       tx=cbind(tx,z)
     }
   }
+  
+  if (sum(is.na(ty))>0){stop("There are NAs in the Y variable.")}
+  if (sum(is.na(tx))>0){stop("There are NAs in the X variable.")}
   
   if (dim(ty)[1]<=dim(tx)[2]){
     warning("WARNING: Number of alr parameters to be estimated greater than sample size \n")
@@ -1415,6 +1504,26 @@ alr_x_impacts = function(results){ # the unique argument is the named list that 
 ilr_y_reg = function(Y,X,V=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
 # pres = TRUE to print with a better presentation (name of variables and sd if it is the case) of B and B*.
   
+  if (constant){x_col_names = c("intercept")}
+  else{x_col_names = c()}
+  
+  for (i in 1:length(X)){
+    if (is.null(colnames(X[[i]]))){
+      for (j in 1:(dim(X[[i]])[2])){
+        x_col_names = c(x_col_names, paste("X_",i,"_",j,sep=""))
+      }
+    }
+    else{x_col_names = c(x_col_names,colnames(X[[i]]))}
+  }
+  
+  if (is.null(colnames(Y))){
+    y_col_names = c()
+    for (i in 1:(dim(Y)[2])){
+      y_col_names = c(y_col_names, paste("Y_",i,sep=""))
+    }
+  }
+  else{y_col_names = colnames(Y)}
+  
   tx = matrix(numeric(dim(X[[1]])[1]))+1 # X = tx as it is already in coord.
   for (i in 1:length(X)){
     tx = cbind(tx,X[[i]])
@@ -1431,6 +1540,9 @@ ilr_y_reg = function(Y,X,V=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
   else{
     V=V_D(dim(Y)[2]) # if V not specified as argument
     ty=ilr(Y,V)}
+  
+  if (sum(is.na(ty))>0){stop("There are NAs in the Y variable.")}
+  if (sum(is.na(tx))>0){stop("There are NAs in the X variable.")}
   
   if (verbose){
   print("yx REGRESSION")
@@ -1478,13 +1590,15 @@ ilr_y_reg = function(Y,X,V=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
   attr(tx,"space") = "ilr_coord"
   attr(tx,"contrast") = NaN
   
-  attr(Bs,"space")="simplex"
+
   
   fittedvalues = tx%*%Bstar
   resid = ty- fittedvalues
   attr(resid,"space") = NULL
   attr(resid,"contrast") = NULL
-  
+  colnames(Bs) = y_col_names
+  rownames(Bs) = x_col_names
+  attr(Bs,"space")="simplex"
   
   list_return = list(Y_coord = ty, X_coord = tx, constant = constant, B_coord = Bstar, B_simplex = Bs, Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
   attr(list_return, "reg_type") = "ilr_y_reg"
@@ -1569,6 +1683,26 @@ ilr_y_reg = function(Y,X,V=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
 ```{r}
 alr_y_reg = function(Y,X,R=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
 # pres = TRUE to print with a better presentation (name of variables and sd if it is the case) of B and B*.
+
+  if (constant){x_col_names = c("intercept")}
+  else{x_col_names = c()}
+  
+  for (i in 1:length(X)){
+    if (is.null(colnames(X[[i]]))){
+      for (j in 1:(dim(X[[i]])[2])){
+        x_col_names = c(x_col_names, paste("X_",i,"_",j,sep=""))
+      }
+    }
+    else{x_col_names = c(x_col_names,colnames(X[[i]]))}
+  }
+  
+  if (is.null(colnames(Y))){
+    y_col_names = c()
+    for (i in 1:(dim(Y)[2])){
+      y_col_names = c(y_col_names, paste("Y_",i,sep=""))
+    }
+  }
+  else{y_col_names = colnames(Y)}
   
   tx = matrix(numeric(dim(X[[1]])[1]))+1 # X = tx as it is already in coord.
   for (i in 1:length(X)){
@@ -1586,6 +1720,9 @@ alr_y_reg = function(Y,X,R=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
   else{
     R=dim(Y)[2] # if R not specified as argument
     ty=alr(Y,R)}
+  
+  if (sum(is.na(ty))>0){stop("There are NAs in the Y variable.")}
+  if (sum(is.na(tx))>0){stop("There are NAs in the X variable.")}
   
   if (verbose){
   print("Y REGRESSION")
@@ -1632,12 +1769,15 @@ alr_y_reg = function(Y,X,R=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
   attr(tx,"space") = "alr_coord"
   attr(tx,"reference") = NaN
   
-  attr(Bs,"space")="simplex"
   
   fittedvalues = tx%*%Bstar
   resid = ty- fittedvalues
   attr(resid,"space") = NULL
   attr(resid,"contrast") = NULL
+  
+  colnames(Bs) = y_col_names
+  rownames(Bs) = x_col_names
+  attr(Bs,"space")="simplex"
   
   list_return = list(Y_coord = ty, X_coord = tx, B_coord = Bstar, B_simplex = Bs, Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
   attr(list_return, "reg_type") = "alr_y_reg"
@@ -1724,6 +1864,8 @@ if (pres=="TRUE"){
 ```{r}
 ilr_y_impacts = function(results){ #results argument regers to the output of ilr_y_reg
   # first we need EY*
+  ccnames = colnames(results$B_simplex)
+  rcnames = rownames(results$B_simplex)
   Bcoord = results$B_coord
   Vy = attr(results$Y_coord, "contrast")
   xcoord = results$X_coord
@@ -1734,6 +1876,8 @@ ilr_y_impacts = function(results){ #results argument regers to the output of ilr
   for (i in 1:(dim(EYsimpl)[1])){
     Wi = diag(D) - matrix(1,D,1)%*%t(EYsimpl[i,])
     imp = t(Wi%*%Vy%*%t(Bcoord))
+    colnames(imp) = ccnames
+    rownames(imp) = rcnames
     impacts[[i]] = imp
   }
   return(impacts)
@@ -1747,6 +1891,8 @@ ilr_y_impacts = function(results){ #results argument regers to the output of ilr
 alr_y_impacts = function(results){ #results argument regers to the output of ilr_y_reg
   # first we need EY*
   Bcoord = results$B_coord
+  coln = colnames(results$B_simplex)
+  rown = rownames(results$B_simplex)
   R = attr(results$Y_coord, "reference")
   xcoord = results$X_coord
   EYcoord = xcoord%*%Bcoord
@@ -1756,7 +1902,11 @@ alr_y_impacts = function(results){ #results argument regers to the output of ilr
   for (i in 1:(dim(EYsimpl)[1])){
     Wi = diag(D) - matrix(1,D,1)%*%t(EYsimpl[i,]) # Wi are the same in both cases
     Wistar = Wi%*%P_D(D) #this is the only important thing that changes
-    impacts[[i]] = t(Wistar%*%t(Bcoord))
+    tempres = t(Wistar%*%t(Bcoord))
+    colnames(tempres) = coln
+    rownames(tempres) = rown
+    
+    impacts[[i]] = tempres
   }
   return(impacts)
 }
@@ -1822,14 +1972,7 @@ imp_summary = function(impact_values){
   print("------------------------------")
   print("          MINIMUMS            ")
   print(minmat)
-  
 }
 ```
-
-```{r}
-imp_summary(imptest)
-```
-
-
 
 
