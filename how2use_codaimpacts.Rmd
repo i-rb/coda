@@ -30,6 +30,10 @@ m4 = example_matrices()[[4]]
 m5 = example_matrices()[[5]]
 ```
 
+```{r}
+impacts(ilr_x_reg(m3,list(m1)))
+# list(a = jdie, b= djid)
+```
 
 ```{r}
 # this is to delete the past elements in the enviroment
@@ -122,7 +126,7 @@ alr = function(x,R=dim(x)[2]){ # x: N x D matrix, R : Reference (last term by de
     }
     copy[i,] = trans
   }
-  copy = copy[,-R]
+  copy = as.matrix(copy[,-R])
   attr(copy, "space") <- "alr_coord"
   attr(copy, "reference") <- R
   return(copy)
@@ -363,18 +367,13 @@ ilr_yx_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbo
   input = var2ilr(Y,X,Z,V,constant)
   ty = input$Y
   tx = input$X
-  
+
   if (sum(is.na(ty))>0){stop("There are NAs in the Y variable.")}
   if (sum(is.na(tx))>0){stop("There are NAs in the X variable.")}
   
   constant = input$constant
   V = input$V
   
-  
-  if (dim(ty)[1]<=dim(tx)[2]){
-    warning("WARNING: Number of ilr parameters to be estimated greater than sample size \n")
-    if (verbose){print(" ")}
-  }
   
   if (verbose){
   print("yx REGRESSION")
@@ -544,6 +543,7 @@ ilr_yx_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbo
   }
 }
 ```
+
 
 ## Transform every variable to ALR
 
@@ -804,11 +804,6 @@ alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=F
   dimy = dim(ty)[2]+1
   constant = input$constant
   
-  if (dim(ty)[1]<=dim(tx)[2]){
-    warning("WARNING: Number of alr parameters to be estimated greater than sample size \n")
-    if (verbose){print(" ")}
-  }
-  
   if (verbose){
   print("yx REGRESSION")
   print("===========================")
@@ -983,6 +978,7 @@ alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=F
 ilr_yx_impacts = function(results){ # the unique argument is the named list that comes from the ilr_yx_reg function
     x_names = rownames(results$B_simplex)
     y_names = colnames(results$B_simplex)
+    constant = results$constant
     tx = results$X_coord
     B = results$B_coord
     exp_Yilr = tx%*%B
@@ -997,11 +993,13 @@ ilr_yx_impacts = function(results){ # the unique argument is the named list that
       imp_i = t(W_i%*%t(Bsimplex))
       colnames(imp_i) = y_names
       rownames(imp_i) = x_names
+      imp_i = imp_i[-1,]
       impacts[[i]] = imp_i
     }
     return(impacts)
 }
 ```
+
 
 ## yx impacts (alr)
 
@@ -1011,6 +1009,7 @@ the thing is that from alr results it is needed to use alr_yx_impacts and ilr_yx
 alr_yx_impacts = function(results){ # the unique argument is the named list that comes from the alr_yx_reg function
     x_names = rownames(results$B_simplex)
     y_names = colnames(results$B_simplex)
+    constant = results$constant
     tx = results$X_coord
     B = results$B_coord
     exp_Yilr = tx%*%B
@@ -1025,11 +1024,13 @@ alr_yx_impacts = function(results){ # the unique argument is the named list that
       imp_i = t(W_i%*%t(Bsimplex))
       colnames(imp_i) = y_names
       rownames(imp_i) = x_names
+      imp_i = imp_i[-1,]
       impacts[[i]] = imp_i
       }
     return(impacts)
 }
 ```
+
 
 ## ILR x reg
 
@@ -1060,10 +1061,6 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbos
   if (sum(is.na(ty))>0){stop("There are NAs in the Y variable.")}
   if (sum(is.na(tx))>0){stop("There are NAs in the X variable.")}
   
-  if (dim(ty)[1]<=dim(tx)[2]){
-    warning("WARNING: Number of ilr parameters to be estimated greater than sample size \n")
-    if (verbose){print(" ")}
-  }
   
   if (verbose){
   print("yx REGRESSION")
@@ -1234,7 +1231,6 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbos
 }
 ```
 
-
 ## ALR x reg
 
 ```{r}
@@ -1271,10 +1267,6 @@ alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FA
   if (sum(is.na(ty))>0){stop("There are NAs in the Y variable.")}
   if (sum(is.na(tx))>0){stop("There are NAs in the X variable.")}
   
-  if (dim(ty)[1]<=dim(tx)[2]){
-    warning("WARNING: Number of alr parameters to be estimated greater than sample size \n")
-    if (verbose){print(" ")}
-  }
   
   if (verbose){
   print("yx REGRESSION")
@@ -1443,6 +1435,162 @@ alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FA
   }
 }
 ```
+
+
+
+
+## check formula
+
+```{r}
+check_formula = function(dataset, formula){ # returns a list of X, a list of Y, a list of Z and the type of model that is specified. It also checks that every value is positive, etc (ask Thibault)
+  constant = as.logical(attr(terms(formula),"intercept")) 
+  compositional_y = FALSE
+  ytext = as.character(formula)[2]
+  if (substring(ytext,1,6) == "cbind("){
+    compositional_y = TRUE
+  }
+  vars_y = all.vars(formula[[2]])
+  Y = as.matrix(dataset[vars_y[[1]]])
+  if (length(vars_y)>1){
+    for (i in 2:length(vars_y)){
+      Y = cbind(Y, as.matrix(dataset[vars_y[[i]]]))  
+    }
+  } 
+  
+  compositional_x = FALSE
+  xtext = as.character(formula)[3]
+  splitted = strsplit(xtext, "\\+|\\-")[[1]]
+  numx=1
+  numz=1
+  X = list() #compo vars
+  Z = list() #standard vars
+  neg = sum(Y<=0)
+  nonumeric = sum(!(is.numeric(Y)))
+  nonumeric = nonumeric + sum((is.nan(Y)))
+  nonumeric = nonumeric + sum((is.na(Y)))
+  
+  for (i in splitted){
+    temp_text = trimws(i)
+    if (!(temp_text=="1" | temp_text=="0")){
+        if (!(substring(temp_text,1,6)=="cbind(")){
+          Z[[numz]]=as.matrix(dataset[temp_text])
+          nonumeric = nonumeric + sum(!(is.numeric(Z[[numz]])))
+          nonumeric = nonumeric + sum((is.na(Z[[numz]])))
+          nonumeric = nonumeric + sum((is.nan(Z[[numz]])))
+          numz = numz + 1
+        }
+        else{
+          compo_text = strsplit(substring(temp_text,7,nchar(temp_text)-1),",")[[1]]
+          compo_mat = as.matrix(dataset[trimws(compo_text[1])])
+          for (k in 2:length(compo_text)){
+            compo_mat = cbind(compo_mat, as.matrix(dataset[trimws(compo_text[k])]))
+          }
+          X[[numx]] = compo_mat
+          neg = neg + sum(X[[numx]]<=0)
+          nonumeric = nonumeric + sum(!(is.numeric(X[[numx]])))
+          nonumeric = nonumeric + sum((is.nan(X[[numx]])))
+          nonumeric = nonumeric + sum((is.na(X[[numx]])))
+          numx = numx + 1 
+        }
+    }
+  }
+  
+  # no negative or 0 values
+  if (nonumeric>0){stop("Variables should be numeric and missing values are not admitted.")}
+  if (neg>0){stop("Values of endogenous and exogenous variables which are compositional should be strictly positive.")}
+  
+  # which compositional model?
+  
+  if (compositional_y == TRUE){
+    if (length(X)>0){
+      cmodel = "yx_reg"
+      if (length(Z)==0){Z=list(matrix())}
+    }
+    else{
+      cmodel = "y_reg"
+      X=Z
+      Z=list(matrix())
+    }
+  }
+  else{
+    if (length(X)>0){
+      cmodel = "x_reg"
+      if (length(Z)==0){Z=list(matrix())}
+    }
+    else{
+      stop("At least one compositional variable should be used in the model.")
+    }
+  }
+  
+  return(list(Y=Y,X=X,Z=Z, model_type = cmodel, constant = constant))
+}
+```
+
+Examples of outputs
+
+```{r}
+check_formula(BDDSegX, V_A + V_C ~ HT_Gazole + HT_SP95)$model_type
+```
+
+```{r}
+check_formula(BDDSegX, cbind(V_A, V_C) ~ HT_Gazole + HT_SP95 + PIB_Courant_t)$model_type
+```
+
+## general regression function
+
+```{r}
+reg = function(dataset, formula, transformation = "ILR", pres=FALSE, V=list(matrix()), R){
+  input = check_formula(dataset, formula)
+  Y = input$Y
+  X = input$X
+  Z = input$Z
+  constant = input$constant
+  model_type = input$model_type
+  if (transformation == "ILR"){
+    if (model_type == "yx_reg"){
+      print("YX-compositional model. ILR transformation. ")
+      print("------------------------------------------- ")
+      return(ilr_yx_reg(Y=Y,X=X,Z=Z,V=V,constant = constant, pres = pres))
+    }
+    if (model_type == "x_reg"){
+      print("X-compositional model. ILR transformation.  ")
+      print("------------------------------------------- ")
+      return(ilr_x_reg(Y=Y,X=X,Z=Z,V=V,constant=constant,pres=pres))
+    }
+    if (model_type == "y_reg"){
+      print("Y-compositional model. ILR transformation.  ")
+      print("------------------------------------------- ")
+      return(ilr_y_reg(Y=Y,X=X,V=V,constant=constant,pres=pres))
+    }
+  }
+  if (transformation == "ALR"){
+    if (model_type == "yx_reg"){
+      print("YX-compositional model. ALR transformation. ")
+      print("------------------------------------------- ")
+      if (missing(R)){R=list(NULL)}
+      return(alr_yx_reg(Y=Y,X=X,Z=Z,R=R,constant=constant,pres=pres))
+    }
+    if (model_type == "x_reg"){
+      print("X-compositional model. ALR transformation.  ")
+      print("------------------------------------------- ")
+      if (missing(R)){R=list(NULL)}
+      return(alr_x_reg(Y=Y,X=X,Z=Z,R=R,constant=constant,pres=pres))
+    }
+    if (model_type == "y_reg"){
+      print("Y-compositional model. ALR transformation.  ")
+      print("------------------------------------------- ")
+      if (missing(R)){R=NaN}
+      return(alr_y_reg(Y=Y,X=X,R=R,constant=constant,pres=pres))
+    }
+  }
+}
+```
+
+
+```{r}
+impacts(reg(dataset = BDDSegX, S_A + S_B ~ cbind(PIB_Courant,  HT_Gazole) + FBCF_Men_Courant, transformation="ALR"))
+```
+
 
 ## ilr_x_impacts
 
@@ -1866,6 +2014,7 @@ ilr_y_impacts = function(results){ #results argument regers to the output of ilr
   # first we need EY*
   ccnames = colnames(results$B_simplex)
   rcnames = rownames(results$B_simplex)
+  constant = results$constant
   Bcoord = results$B_coord
   Vy = attr(results$Y_coord, "contrast")
   xcoord = results$X_coord
@@ -1878,10 +2027,33 @@ ilr_y_impacts = function(results){ #results argument regers to the output of ilr
     imp = t(Wi%*%Vy%*%t(Bcoord))
     colnames(imp) = ccnames
     rownames(imp) = rcnames
+    if (constant){
+        if (dim(imp)[1]==2){ 
+          imp = t(as.matrix(imp)[-1,])
+          rownames(imp) = c(rcnames[[2]])
+        }
+        else{
+          imp = imp[-1,]
+        }
+      }
     impacts[[i]] = imp
   }
   return(impacts)
 }
+```
+
+```{r}
+ilr_y_impacts(ilr_y_reg(m1,list(m3)))[[1]]
+```
+
+
+```{r}
+ilr_y_impacts(ilr_y_reg(m1,list(m3,m5)))
+```
+
+
+```{r}
+ilr_y_impacts(ilr_y_reg(m1,list(m3,m5)))
 ```
 
 
