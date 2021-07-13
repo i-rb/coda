@@ -36,6 +36,12 @@ impacts(ilr_x_reg(m3,list(m1)))
 ```
 
 ```{r}
+load("/Users/ivanrendobarreiro/coda/packageone/data/BDDSegX.RData")
+```
+
+
+
+```{r}
 # this is to delete the past elements in the enviroment
 rm(list = ls())
 ```
@@ -684,6 +690,7 @@ var2alr = function(Y,X,Z=list(matrix()),R=list(matrix()),constant=TRUE){
 }
 ```
 
+
 ## P_D matrix
 
 ```{r}
@@ -1037,6 +1044,37 @@ alr_yx_impacts = function(results){ # the unique argument is the named list that
 ```{r}
 ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
 # pres = TRUE toprint with a better presentation (name of variables and sd if it is the case) of B and B*.
+
+  if (constant){x_col_names = c("intercept")}
+  else{x_col_names = c()}
+  
+  for (i in 1:length(X)){
+    if (is.null(colnames(X[[i]]))){
+      for (j in 1:(dim(X[[i]])[2])){
+        x_col_names = c(x_col_names, paste("X_",i,"_",j,sep=""))
+      }
+    }
+    else{x_col_names = c(x_col_names,colnames(X[[i]]))}
+  }
+  if (!is.na(Z[[1]][1,1])){
+    for (i in 1:length(Z)){
+      if (is.null(colnames(Z[[i]]))){
+      for (j in 1:(dim(Z[[i]])[2])){
+        x_col_names = c(x_col_names, paste("Z_",i,"_",j,sep=""))
+      }
+    }
+      else{x_col_names = c(x_col_names,colnames(Z[[i]]))
+      }
+    }
+  }
+  
+  if (is.null(colnames(Y))){
+    y_col_names = c()
+    for (i in 1:(dim(Y)[2])){
+      y_col_names = c(y_col_names, paste("Y_",i,sep=""))
+    }
+  }
+  else{y_col_names = colnames(Y)}
   
   ty = Y #already in coordinates
   if (is.na(V[[1]][1,1])){
@@ -1126,6 +1164,9 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbos
   attr(tx,"space") = "ilr_coord"
   attr(tx,"contrast") = V
   
+  Bs = as.matrix(Bs)
+  colnames(Bs) = y_col_names
+  rownames(Bs) = x_col_names
   attr(Bs,"space")="simplex"
   
   fittedvalues = tx%*%Bstar
@@ -1234,8 +1275,53 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbos
 ## ALR x reg
 
 ```{r}
+m1
+```
+
+
+```{r}
+impacts(ilr_x_reg(m5,list(m1,m4),list(m3)))
+```
+
+```{r}
+impacts(reg(dataset = BDDSegX, S_A + S_B ~ cbind(PIB_Courant_t,  HT_Gazole, FBCF_Men_Courant), "ILR"))
+```
+
+
+```{r}
 alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
-# pres = TRUE toprint with a better presentation (name of variables and sd if it is the case) of B and B*.
+# pres = TRUE to print with a better presentation (name of variables and sd if it is the case) of B and B*.
+  
+  if (constant){x_col_names = c("intercept")}
+  else{x_col_names = c()}
+  
+  for (i in 1:length(X)){
+    if (is.null(colnames(X[[i]]))){
+      for (j in 1:(dim(X[[i]])[2])){
+        x_col_names = c(x_col_names, paste("X_",i,"_",j,sep=""))
+      }
+    }
+    else{x_col_names = c(x_col_names,colnames(X[[i]]))}
+  }
+  if (!is.na(Z[[1]][1,1])){
+    for (i in 1:length(Z)){
+      if (is.null(colnames(Z[[i]]))){
+      for (j in 1:(dim(Z[[i]])[2])){
+        x_col_names = c(x_col_names, paste("Z_",i,"_",j,sep=""))
+      }
+    }
+      else{x_col_names = c(x_col_names,colnames(Z[[i]]))
+      }
+    }
+  }
+  
+  if (is.null(colnames(Y))){
+    y_col_names = c()
+    for (i in 1:(dim(Y)[2])){
+      y_col_names = c(y_col_names, paste("Y_",i,sep=""))
+    }
+  }
+  else{y_col_names = colnames(Y)}
   
   ty = Y #already in coordinates
   if (is.null(R[[1]])){
@@ -1335,6 +1421,10 @@ alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FA
   attr(tx,"space") = "alr_coord"
   attr(tx,"reference") = R
   
+  Bs = as.matrix(Bs)
+  
+  colnames(Bs) = y_col_names
+  rownames(Bs) = x_col_names
   attr(Bs,"space")="simplex"
   
   fittedvalues = tx%*%Bstar
@@ -1586,9 +1676,8 @@ reg = function(dataset, formula, transformation = "ILR", pres=FALSE, V=list(matr
 }
 ```
 
-
 ```{r}
-impacts(reg(dataset = BDDSegX, S_A + S_B ~ cbind(PIB_Courant,  HT_Gazole) + FBCF_Men_Courant, transformation="ALR"))
+impacts(reg(BDDSegX, HT_Gazole ~ cbind(S_A,S_B) + cbind(S_C,S_D) + PIB_Courant_t))
 ```
 
 
@@ -1597,7 +1686,10 @@ impacts(reg(dataset = BDDSegX, S_A + S_B ~ cbind(PIB_Courant,  HT_Gazole) + FBCF
 ```{r}
 ilr_x_impacts = function(results){ # the unique argument is the named list that comes from the ilr_x_reg function
     B = results$B_coord
+    xnames = rownames(results$B_simplex)
+    ynames = colnames(results$B_simplex)
     constant = results$constant
+    if (constant){xnames = xnames[-1]}
     Vx = attr(B,"contrast")
     if (constant){
       if (dim(B)[2]==1){B=matrix(B[-1,])}
@@ -1613,7 +1705,24 @@ ilr_x_impacts = function(results){ # the unique argument is the named list that 
       bstar = B[h:(h+dimx-2),]
       h=h+dimx-1
       impacts[[i]]=Vx[[i]]%*%bstar
+    }
+    cc=1
+    for (k in (1:length(impacts))){
+      val = impacts[[k]]
+      ldimx = dim(val)[1]
+      colnames(val) = ynames
+      rownames(val) = xnames[cc:(cc+ldimx-1)]
+      cc = cc + ldimx
+      impacts[[k]] = val
+    }
+    ## part of pooling impacts into a single matrix 
+    impacts_mat = impacts[[1]]
+    if (length(impacts)>1){
+      for (j in (2:length(impacts))){
+        impacts_mat = rbind(impacts_mat, impacts[[j]])
       }
+    }
+    return(impacts_mat)
     return(impacts)
 }
 ```
@@ -1624,7 +1733,10 @@ ilr_x_impacts = function(results){ # the unique argument is the named list that 
 ```{r}
 alr_x_impacts = function(results){ # the unique argument is the named list that comes from the ilr_yx_reg function
     B = results$B_coord
+    xnames = rownames(results$B_simplex)
+    ynames = colnames(results$B_simplex)
     constant = results$constant
+    if (constant){xnames = xnames[-1]}
     listxdim = results$xdim
     R = attr(B,"reference")
     if (constant){
@@ -1641,8 +1753,24 @@ alr_x_impacts = function(results){ # the unique argument is the named list that 
       bstar = B[h:(h+dimx-2),]
       h=h+dimx-1
       impacts[[i]]=t(F_D(dimx))%*%bstar
+    }
+    cc=1
+    for (k in (1:length(impacts))){
+      val = impacts[[k]]
+      ldimx = dim(val)[1]
+      colnames(val) = ynames
+      rownames(val) = xnames[cc:(cc+ldimx-1)]
+      cc = cc + ldimx
+      impacts[[k]] = val
+    }
+    ## part of pooling impacts into a single matrix 
+    impacts_mat = impacts[[1]]
+    if (length(impacts)>1){
+      for (j in (2:length(impacts))){
+        impacts_mat = rbind(impacts_mat, impacts[[j]])
       }
-    return(impacts)
+    }
+    return(impacts_mat)
 }
 ```
 
@@ -1826,12 +1954,14 @@ ilr_y_reg = function(Y,X,V=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
 }
 ```
 
+
 ## alr_y_reg
 
 ```{r}
 alr_y_reg = function(Y,X,R=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
 # pres = TRUE to print with a better presentation (name of variables and sd if it is the case) of B and B*.
 
+  
   if (constant){x_col_names = c("intercept")}
   else{x_col_names = c()}
   
@@ -2128,23 +2258,51 @@ imp_summary = function(impact_values){
   print("==============================")
   print("          MAXIMUMS            ")
   print(maxmat)
-  print("                              ")
-  print("------------------------------")
-  print("         Q3s (0.75)           ")
-  print(q3mat)
-  print("                              ")
-  print("------------------------------")
-  print("          MEDIANS             ")
-  print(medmat)
-  print("                              ")
-  print("------------------------------")
-  print("        Q1s (0.25)            ")
-  print(q1mat)
-  print("                              ")
-  print("------------------------------")
-  print("          MINIMUMS            ")
-  print(minmat)
 }
 ```
 
+```{r}
+imp_summary = function(impact_results){
+  ynames = colnames(impact_results[[1]])
+  xnames = rownames(impact_results[[1]])
+  ncols = length(ynames)*length(xnames)
+  xaxis = numeric(ncols)
+  cc=1
+  for (i in xnames){
+    for (j in ynames){
+      xaxis[cc] = paste(i,j,sep=" -> ") #to?
+      cc=cc+1
+    }
+  }
+  resmat = matrix(0,ncols,6)
+  rownames(resmat) = xaxis
+  colnames(resmat) = c("Mean", "Min.", "q1 (25%)", "q2 (50%)", "q3 (75%)", "Max.")
+  qq=1
+  for (i in 1:length(xnames)){
+    for (j in 1:length(ynames)){
+      values = numeric(length(impact_results))
+      for (n in 1:length(impact_results)){
+        values[n] = impact_results[[n]][i,j]
+      }
+      resmat[qq,1] = mean(values)
+      resmat[qq,2] = min(values)
+      resmat[qq,3] = quantile(values,0.25)
+      resmat[qq,4] = quantile(values,0.5)
+      resmat[qq,5] = quantile(values,0.75)
+      resmat[qq,6] = max(values)
+      qq=qq+1
+    }
+  }
+  return(resmat)
+}
+```
+
+```{r}
+
+```
+
+
+```{r}
+imp_summary(impacts(ilr_yx_reg(m1,list(m2), list(m5))))
+```
 
