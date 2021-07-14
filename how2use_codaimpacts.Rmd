@@ -1274,19 +1274,6 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbos
 
 ## ALR x reg
 
-```{r}
-m1
-```
-
-
-```{r}
-impacts(ilr_x_reg(m5,list(m1,m4),list(m3)))
-```
-
-```{r}
-impacts(reg(dataset = BDDSegX, S_A + S_B ~ cbind(PIB_Courant_t,  HT_Gazole, FBCF_Men_Courant), "ILR"))
-```
-
 
 ```{r}
 alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
@@ -1616,16 +1603,6 @@ check_formula = function(dataset, formula){ # returns a list of X, a list of Y, 
 }
 ```
 
-Examples of outputs
-
-```{r}
-check_formula(BDDSegX, V_A + V_C ~ HT_Gazole + HT_SP95)$model_type
-```
-
-```{r}
-check_formula(BDDSegX, cbind(V_A, V_C) ~ HT_Gazole + HT_SP95 + PIB_Courant_t)$model_type
-```
-
 ## general regression function
 
 ```{r}
@@ -1674,10 +1651,6 @@ reg = function(dataset, formula, transformation = "ILR", pres=FALSE, V=list(matr
     }
   }
 }
-```
-
-```{r}
-impacts(reg(BDDSegX, HT_Gazole ~ cbind(S_A,S_B) + cbind(S_C,S_D) + PIB_Courant_t))
 ```
 
 
@@ -2057,7 +2030,7 @@ alr_y_reg = function(Y,X,R=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
   rownames(Bs) = x_col_names
   attr(Bs,"space")="simplex"
   
-  list_return = list(Y_coord = ty, X_coord = tx, B_coord = Bstar, B_simplex = Bs, Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
+  list_return = list(Y_coord = ty, X_coord = tx, constant=constant, B_coord = Bstar, B_simplex = Bs, Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
   attr(list_return, "reg_type") = "alr_y_reg"
   
   
@@ -2172,19 +2145,6 @@ ilr_y_impacts = function(results){ #results argument regers to the output of ilr
 }
 ```
 
-```{r}
-ilr_y_impacts(ilr_y_reg(m1,list(m3)))[[1]]
-```
-
-
-```{r}
-ilr_y_impacts(ilr_y_reg(m1,list(m3,m5)))
-```
-
-
-```{r}
-ilr_y_impacts(ilr_y_reg(m1,list(m3,m5)))
-```
 
 
 ## ALR y impacts 
@@ -2192,6 +2152,7 @@ ilr_y_impacts(ilr_y_reg(m1,list(m3,m5)))
 ```{r}
 alr_y_impacts = function(results){ #results argument regers to the output of ilr_y_reg
   # first we need EY*
+  constant = results$constant
   Bcoord = results$B_coord
   coln = colnames(results$B_simplex)
   rown = rownames(results$B_simplex)
@@ -2207,6 +2168,15 @@ alr_y_impacts = function(results){ #results argument regers to the output of ilr
     tempres = t(Wistar%*%t(Bcoord))
     colnames(tempres) = coln
     rownames(tempres) = rown
+    if (constant){
+      if (dim(tempres)[1]==2){ 
+          tempres = t(as.matrix(tempres)[-1,])
+          rownames(tempres) = c(rown[[2]])
+        }
+        else{
+          tempres = tempres[-1,]
+        }
+      }
     
     impacts[[i]] = tempres
   }
@@ -2231,35 +2201,6 @@ impacts = function(results){
 
 
 ## summary for impacts (only for yx and y models. For x models it makes no sense.)
-
-```{r}
-imp_summary = function(impact_values){
-  dim1 = dim(impact_values[[1]])[1]
-  dim2 = dim(impact_values[[1]])[2]
-  maxmat = matrix(0,dim1,dim2)
-  q3mat = matrix(0,dim1,dim2)
-  medmat = matrix(0,dim1,dim2)
-  q1mat = matrix(0,dim1,dim2)
-  minmat = matrix(0,dim1,dim2)
-  for (i in (1:dim1)){
-    for (j in (1:dim2)){
-      values = numeric(length(impact_values))
-      for (k in (1:length(impact_values))){
-        values[k] = impact_values[[k]][i,j]
-      }
-      maxmat[i,j] = max(values)
-      q3mat[i,j] = quantile(values,0.75)
-      medmat[i,j] = quantile(values,0.5)
-      q1mat[i,j] = quantile(values,0.25)
-      minmat[i,j] = min(values)
-    }
-  }
-  print("     SUMMARY OF IMPACTS       ")
-  print("==============================")
-  print("          MAXIMUMS            ")
-  print(maxmat)
-}
-```
 
 ```{r}
 imp_summary = function(impact_results){
@@ -2298,11 +2239,32 @@ imp_summary = function(impact_results){
 ```
 
 ```{r}
-
+share_ratio_summary = function(results){
+  Bs = results$B_simplex
+  xnames = rownames(Bs)
+  constant = results$constant
+  if (constant){
+    if (dim(Bs)[1]==2){
+      Bs = t(as.matrix(Bs[-1,]))
+      rownames(Bs) = c(xnames[[2]])}
+    else{Bs = as.matrix(Bs[-1,])}
+  }
+  res=list()
+  P = (dim(Bs)[1])
+  for (k in 1:P){
+    dimy = dim(Bs)[2]
+    matres = matrix(0,dimy,dimy)
+    for (i in 1:dimy){
+      for (j in 1:dimy){
+        matres[i,j] = log(Bs[k,j]/Bs[k,i])
+      }
+    }
+    colnames(matres) = colnames(Bs)
+    rownames(matres) = colnames(Bs)
+    res[[xnames[[k+1]]]] = matres
+  }
+  return(res)
+}
 ```
 
-
-```{r}
-imp_summary(impacts(ilr_yx_reg(m1,list(m2), list(m5))))
-```
 
