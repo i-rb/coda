@@ -248,7 +248,7 @@ var2ilr = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE){
 
   ty = ilr(Y, V[[1]])
     
-  # transfrom X to the ilr coordinates
+  # transform X to the ilr coordinates
   tx = matrix(numeric(dim(X[[1]])[1]))+1 # here it is created a matrix which is a vector of ones (should be removed afterwords if c=False)
   for (i in 1:length(X)){
     tx = cbind(tx,ilr(X[[i]],V[[i+1]])) # the transformed X is created as a unique matrix
@@ -1039,6 +1039,9 @@ alr_yx_impacts = function(results){ # the unique argument is the named list that
 ```
 
 
+
+
+
 ## ILR x reg
 
 ```{r}
@@ -1111,7 +1114,7 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbos
 
   Bstar = mlm(ty,tx)
   bcov = b_cov(tx,ty,Bstar)
-  Bs = t(matrix(numeric(dim(Y)[2])))
+  Bs = as.matrix(t(matrix(numeric(dim(Y)[2]))))
   
   if (verbose){
   print("B* in the coordinates space:")
@@ -1119,7 +1122,7 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbos
   print("---------------------------")}
   if (constant==TRUE){
     b0=Bstar[1,]
-    Bs=rbind(Bs, Bstar[1,])
+    Bs=as.matrix(rbind(Bs, Bstar[1,]))
     if (verbose){
     print("b0 in the simplex:")
     print(b0)}
@@ -1138,8 +1141,8 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbos
     }
     if (h==(h+dimx-2)){matrix_x = t(matrix(Bstar[h,]))}
     if (h!=(h+dimx-2)){matrix_x = Bstar[h:(h+dimx-2),] }
-    B_q = t(matrix_x)%*%t(V[[i]])
-    Bs= rbind(Bs, t(B_q))
+    B_q = as.matrix(t(matrix_x)%*%t(V[[i]]))
+    Bs= as.matrix(rbind(Bs, t(B_q)))
     h=h+dimx-1
     if (verbose){print(t(B_q))}
   }
@@ -1152,12 +1155,12 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbos
       if (h==(h+dimz-1)){matrix_z = t(matrix(Bstar[h,]))}
       if (h!=(h+dimz-1)){matrix_z = Bstar[h:(h+dimz-1),]} # it is non comp, it does not lose a dimension in the transformation
       h=h+dimz
-      c_k = matrix_z
-      Bs = rbind(Bs, c_k)
+      c_k = as.matrix(matrix_z)
+      Bs = as.matrix(rbind(Bs, c_k))
       if (verbose){print(c_k)}
     }
   }
-  Bs = Bs[-1,]
+  Bs = as.matrix(Bs[-1,])
   attr(Bstar,"space")="ilr_coord"
   attr(Bstar,"contrast") = V
   
@@ -1180,8 +1183,6 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbos
   
   if (!pres){return(reslist)} # return results if not pres
   
-  
-  # till here
   
   # part of PRES = TRUE
   
@@ -1272,8 +1273,8 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbos
 }
 ```
 
-## ALR x reg
 
+## ALR x reg
 
 ```{r}
 alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
@@ -1383,7 +1384,7 @@ alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FA
     if (h!=(h+dimx-2)){matrix_x = Bstar[h:(h+dimx-2),] }
     B_q = t(matrix_x)%*%F_D(dimx)
     B_q = inv_permutation_D(B_q,R[[i]])
-    Bs= rbind(Bs, t(B_q))
+    Bs= rbind(Bs, as.matrix(t(B_q)))
     h=h+dimx-1
     if (verbose){print(t(B_q))}
   }
@@ -1396,12 +1397,12 @@ alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FA
       if (h==(h+dimz-1)){matrix_z = t(matrix(Bstar[h,]))}
       if (h!=(h+dimz-1)){matrix_z = Bstar[h:(h+dimz-1),]} # it is non comp, it does not lose a dimension in the transformation
       h=h+dimz
-      c_k = matrix_z
+      c_k = as.matrix(matrix_z)
       Bs = rbind(Bs, c_k)
       if (verbose){print(c_k)}
     }
   }
-  Bs = Bs[-1,]
+  Bs = as.matrix(Bs[-1,])
   attr(Bstar,"space")="alr_coord"
   attr(Bstar,"reference") = R
   
@@ -1699,6 +1700,15 @@ ilr_x_impacts = function(results){ # the unique argument is the named list that 
     return(impacts)
 }
 ```
+
+
+- INTRODUCE ALSO: (1) 
+  impacts of Z variables in the impacts(ilr_x_reg(...))
+  
+- MEETING (3)
+
+- PERSONALIZATION ISSUE (4)
+- CONSTANT ISSUE (5)
 
 
 ## alr_x_impacts
