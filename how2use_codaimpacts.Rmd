@@ -10,7 +10,7 @@ output:
     toc: yes
 ---
 
-This brief notebook is only to create the package
+This notebook is only to create the package
 
 ```{r}
 example_matrices = function(){
@@ -30,10 +30,6 @@ m4 = example_matrices()[[4]]
 m5 = example_matrices()[[5]]
 ```
 
-```{r}
-impacts(ilr_x_reg(m3,list(m1)))
-# list(a = jdie, b= djid)
-```
 
 ```{r}
 load("/Users/ivanrendobarreiro/coda/packageone/data/BDDSegX.RData")
@@ -149,7 +145,12 @@ inversealr = function(x,R=dim(x)[2]+1){ # x = NxD-1 matrix, R original reference
   D_1 = dim(x)[2]
   if (R==(D_1+1)){aumented = cbind(x,numeric(dim(x)[1]))}
   if (R==1){aumented = cbind(numeric(dim(x)[1]),x)}
-  if ((R!=(D_1+1)&(R!=1))){aumented = cbind(x[,1:R-1],numeric(dim(x)[1]),x[,R:D_1])}
+  if ((R!=(D_1+1)&(R!=1))){
+    if (dim(x)[1]==1){
+      aumented = cbind(t(as.matrix(x[,1:R-1])),t(numeric(dim(x)[1])),t(as.matrix(x[,R:D_1])))}
+    else{aumented = cbind(x[,1:R-1],numeric(dim(x)[1]),x[,R:D_1])
+    }
+  }
   res = closure(exp(aumented))
   attr(res,"space") = "simplex"
   attr(res,"reference") = NULL
@@ -537,15 +538,22 @@ ilr_yx_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbo
     rownames(dfilr) = rname
     colnames(dfilr) = cnames
     
+    colnames(dfsimplex) = colnames(Bs)
+    rownames(dfsimplex) = rownames(Bs) 
     
-    print("      B (COEFFICIENTS IN THE SIMPLEX):      ")
-    print(as.matrix(dfsimplex))
-    print("--------------------------------------------")
-    print("     B* (COEF. and SD IN THE ILR SPACE):    ")
-    print(as.matrix(dfilr))
-    print("--------------------------------------------")
-    print(paste("n obs  : ", dim(tx)[1], sep="")) 
-    print(paste("SSR    : ", sum(resid^2), sep="")) # sum of squared residuals
+    arg1 = "      B (COEFFICIENTS IN THE SIMPLEX):      "
+    arg2 = as.matrix(dfsimplex)
+    arg3 = "--------------------------------------------"
+    arg4 = "     B* (COEF. and SD IN THE ALR SPACE):    "
+    arg5 = as.matrix(dfilr)
+    arg6 = "--------------------------------------------"
+    arg7 = paste("n obs  : ", dim(tx)[1], sep="")
+    arg8 = paste("SSR    : ", sum(resid^2), sep="") # sum of squared residuals
+    cat(arg1,"\n")
+    print(arg2)
+    cat(arg3,"\n", arg4,"\n")
+    print(arg5)
+    cat(arg6,"\n", arg7,"\n", arg8,"\n")
   }
 }
 ```
@@ -742,17 +750,32 @@ permutation_D = function(mat,P){ # this function takes as an input a matrix (mat
 ```{r}
 inv_permutation_D = function(mat,P){ # undoes the permutation
   D = dim(mat)[2]
-  if (D==P){
-    return(mat)
-  }
-  if (1==P){
-    return(cbind(mat[,D],mat[,1:(D-1)]))
+  dy = dim(mat)[1]
+  if (dy!=1){
+    if (D==P){
+      return(mat)
+    }
+    if (1==P){
+      return(cbind(mat[,D],mat[,1:(D-1)]))
+    }
+    else{
+      return(cbind(mat[,1:(P-1)],mat[,D],mat[,(P):(D-1)]))
+    }
   }
   else{
-    return(cbind(mat[,1:(P-1)],mat[,D],mat[,(P):(D-1)]))
+    if (D==P){
+      return(mat)
+    }
+    if (1==P){
+      return(cbind(as.matrix(mat[,D]),t(as.matrix(mat[,1:(D-1)]))))
+    }
+    else{
+      return(cbind(t(as.matrix(mat[,1:(P-1)])),t(as.matrix(mat[,D])),t(as.matrix(mat[,(P):(D-1)]))))
+    }
   }
 }
 ```
+
 
 ## ALR yx reg
 
@@ -850,12 +873,23 @@ alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=F
     if (h==(h+dimx-2)){matrix_x = t(matrix(Bstar[h,]))}
     if (h!=(h+dimx-2)){matrix_x = Bstar[h:(h+dimx-2),] }
     B_q = K_D(dimy)%*%t(matrix_x)%*%F_D(dimx)
-    B_q = inv_permutation_D(B_q,R[[i+1]])
-    Bs= rbind(Bs, t(B_q))
+    B_q = t(B_q)
+    B_q = t(inv_permutation_D(t(B_q),R[[i+1]]))
+    Bs= rbind(Bs, B_q)
     h=h+dimx-1
-    if (verbose){print(t(B_q))}
+    if (verbose){print(B_q)}
   }
   if (verbose){print("---------------------------")}
+  
+  Bs = Bs[-1,]
+  if (constant){
+    Bsintercept = Bs[1,]
+    Bs = Bs[-1,]
+  }
+  Bs = inv_permutation_D(Bs,R[[1]])
+  if (constant){
+    Bs = rbind(Bsintercept,Bs)
+  }
   
   if (!is.na(Z[[1]][1,1])){
     for (i in 1:length(Z)){
@@ -864,12 +898,13 @@ alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=F
       if (h==(h+dimz-1)){matrix_z = t(matrix(Bstar[h,]))}
       if (h!=(h+dimz-1)){matrix_z = Bstar[h:(h+dimz-1),]} # it is non comp, it does not lose a dimension in the transformation
       h=h+dimz
-      c_k = inversealr(matrix_z, R[[1]]) # change R[[1]] with the other...
+      c_k = inversealr(matrix_z, R[[1]]) 
       Bs = rbind(Bs, c_k)
       if (verbose){print(c_k)}
     }
   }
-  Bs = Bs[-1,]
+
+  
   attr(Bstar,"space")="alr_coord"
   attr(Bstar,"reference") = R
   
@@ -966,18 +1001,28 @@ alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=F
     rownames(dfalr) = rname
     colnames(dfalr) = cnames
     
+    colnames(dfsimplex) = colnames(Bs)
+    rownames(dfsimplex) = rownames(Bs) 
     
-    print("      B (COEFFICIENTS IN THE SIMPLEX):      ")
-    print(as.matrix(dfsimplex))
-    print("--------------------------------------------")
-    print("     B* (COEF. and SD IN THE COORDINATES):    ")
-    print(as.matrix(dfalr))
-    print("--------------------------------------------")
-    print(paste("n obs  : ", dim(tx)[1], sep="")) 
-    print(paste("SSR    : ", sum(resid^2), sep="")) # sum of squared residuals
+    arg1 = "      B (COEFFICIENTS IN THE SIMPLEX):      "
+    arg2 = as.matrix(dfsimplex)
+    arg3 = "--------------------------------------------"
+    arg4 = "     B* (COEF. and SD IN THE ALR SPACE):    "
+    arg5 = as.matrix(dfalr)
+    arg6 = "--------------------------------------------"
+    arg7 = paste("n obs  : ", dim(tx)[1], sep="")
+    arg8 = paste("SSR    : ", sum(resid^2), sep="") # sum of squared residuals
+    cat(arg1,"\n")
+    print(arg2)
+    cat(arg3,"\n", arg4,"\n")
+    print(arg5)
+    cat(arg6,"\n", arg7,"\n", arg8,"\n")
   }
 }
 ```
+
+
+
 
 ## yx impacts (ilr)
 
@@ -1218,6 +1263,7 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbos
       cnames = c(cnames, paste("(sd_Yilr_",i,")",sep=""))
     }
     
+    
     rname = c()
     if (constant){rname = c(rname, "intercept")}
     for (i in 1:length(X)){
@@ -1260,19 +1306,25 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbos
     rownames(dfilr) = rname
     colnames(dfilr) = cnames
     
+    colnames(dfsimplex) = colnames(Bs)
+    rownames(dfsimplex) = rownames(Bs) 
     
-    print("      B (COEFFICIENTS IN THE SIMPLEX):      ")
-    print(as.matrix(dfsimplex))
-    print("--------------------------------------------")
-    print("     B* (COEF. and SD IN THE ILR SPACE):    ")
-    print(as.matrix(dfilr))
-    print("--------------------------------------------")
-    print(paste("n obs  : ", dim(tx)[1], sep="")) 
-    print(paste("SSR    : ", sum(resid^2), sep="")) # sum of squared residuals
+    arg1 = "      B (COEFFICIENTS IN THE SIMPLEX):      "
+    arg2 = as.matrix(dfsimplex)
+    arg3 = "--------------------------------------------"
+    arg4 = "     B* (COEF. and SD IN THE ILR SPACE):    "
+    arg5 = as.matrix(dfilr)
+    arg6 = "--------------------------------------------"
+    arg7 = paste("n obs  : ", dim(tx)[1], sep="")
+    arg8 = paste("SSR    : ", sum(resid^2), sep="") # sum of squared residuals
+    cat(arg1,"\n")
+    print(arg2)
+    cat(arg3,"\n", arg4,"\n")
+    print(arg5)
+    cat(arg6,"\n", arg7,"\n", arg8,"\n")
   }
 }
 ```
-
 
 ## ALR x reg
 
@@ -1325,9 +1377,9 @@ alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FA
       }
     }
   
-  tx = matrix(numeric(dim(X[[1]])[1]))+1 # here it is created a matrix which is a vector of ones (should be removed afterwords if c=False)
+  tx = matrix(numeric(dim(X[[1]])[1]))+1 # here it is created a matrix which is a vector of ones (should be removed afterwords if constant=False)
   for (i in 1:length(X)){
-    tx = cbind(tx,alr(X[[i]],R[[i]])) # the transformed X is created as a unique matrix
+    tx = cbind(tx,alr(X[[i]],dim(X[[i]])[2])) # the transformed X is created as a unique matrix
     }
   if (constant==FALSE){ # should remove the vector of zeros if no constant is required
     tx=tx[,-1]
@@ -1383,8 +1435,8 @@ alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FA
     if (h==(h+dimx-2)){matrix_x = t(matrix(Bstar[h,]))}
     if (h!=(h+dimx-2)){matrix_x = Bstar[h:(h+dimx-2),] }
     B_q = t(matrix_x)%*%F_D(dimx)
-    B_q = inv_permutation_D(B_q,R[[i]])
-    Bs= rbind(Bs, as.matrix(t(B_q)))
+    B_q = inv_permutation_D(B_q, R[[i]])
+    Bs= rbind(Bs, t(B_q))
     h=h+dimx-1
     if (verbose){print(t(B_q))}
   }
@@ -1501,26 +1553,30 @@ alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FA
     rownames(dfalr) = rname
     colnames(dfalr) = cnames
     
+    colnames(dfsimplex) = colnames(Bs)
+    rownames(dfsimplex) = rownames(Bs) 
     
-    print("      B (COEFFICIENTS IN THE SIMPLEX):      ")
-    print(as.matrix(dfsimplex))
-    print("--------------------------------------------")
-    print("     B* (COEF. and SD IN THE ALR SPACE):    ")
-    print(as.matrix(dfalr))
-    print("--------------------------------------------")
-    print(paste("n obs  : ", dim(tx)[1], sep="")) 
-    print(paste("SSR    : ", sum(resid^2), sep="")) # sum of squared residuals
+    arg1 = "      B (COEFFICIENTS IN THE SIMPLEX):      "
+    arg2 = as.matrix(dfsimplex)
+    arg3 = "--------------------------------------------"
+    arg4 = "     B* (COEF. and SD IN THE ALR SPACE):    "
+    arg5 = as.matrix(dfalr)
+    arg6 = "--------------------------------------------"
+    arg7 = paste("n obs  : ", dim(tx)[1], sep="")
+    arg8 = paste("SSR    : ", sum(resid^2), sep="") # sum of squared residuals
+    cat(arg1,"\n")
+    print(arg2)
+    cat(arg3,"\n", arg4,"\n")
+    print(arg5)
+    cat(arg6,"\n", arg7,"\n", arg8,"\n")
   }
 }
 ```
 
-
-
-
 ## check formula
 
 ```{r}
-check_formula = function(dataset, formula){ # returns a list of X, a list of Y, a list of Z and the type of model that is specified. It also checks that every value is positive, etc (ask Thibault)
+check_formula = function(dataset, formula){ # returns a list of X, a list of Y, a list of Z and the type of model that is specified. It also checks that every value is positive
   constant = as.logical(attr(terms(formula),"intercept")) 
   compositional_y = FALSE
   ytext = as.character(formula)[2]
@@ -1616,37 +1672,43 @@ reg = function(dataset, formula, transformation = "ILR", pres=FALSE, V=list(matr
   model_type = input$model_type
   if (transformation == "ILR"){
     if (model_type == "yx_reg"){
-      print("YX-compositional model. ILR transformation. ")
-      print("------------------------------------------- ")
+      if (pres){
+      cat("YX-compositional model. ILR transformation. \n", "========================================== \n")
+      }
       return(ilr_yx_reg(Y=Y,X=X,Z=Z,V=V,constant = constant, pres = pres))
     }
     if (model_type == "x_reg"){
-      print("X-compositional model. ILR transformation.  ")
-      print("------------------------------------------- ")
+      if (pres){
+      cat("X-compositional model. ILR transformation. \n", "========================================== \n")
+      }
       return(ilr_x_reg(Y=Y,X=X,Z=Z,V=V,constant=constant,pres=pres))
     }
     if (model_type == "y_reg"){
-      print("Y-compositional model. ILR transformation.  ")
-      print("------------------------------------------- ")
+      if (pres){
+      cat("Y-compositional model. ILR transformation. \n", "========================================== \n")
+      }
       return(ilr_y_reg(Y=Y,X=X,V=V,constant=constant,pres=pres))
     }
   }
   if (transformation == "ALR"){
     if (model_type == "yx_reg"){
-      print("YX-compositional model. ALR transformation. ")
-      print("------------------------------------------- ")
+      if (pres){
+      cat("YX-compositional model. ALR transformation. \n", "========================================== \n")
+      }
       if (missing(R)){R=list(NULL)}
       return(alr_yx_reg(Y=Y,X=X,Z=Z,R=R,constant=constant,pres=pres))
     }
     if (model_type == "x_reg"){
-      print("X-compositional model. ALR transformation.  ")
-      print("------------------------------------------- ")
+      if (pres){
+      cat("X-compositional model. ALR transformation. \n", "========================================== \n")
+      }
       if (missing(R)){R=list(NULL)}
       return(alr_x_reg(Y=Y,X=X,Z=Z,R=R,constant=constant,pres=pres))
     }
     if (model_type == "y_reg"){
-      print("Y-compositional model. ALR transformation.  ")
-      print("------------------------------------------- ")
+      if (pres){
+      cat("Y-compositional model. ALR transformation. \n", "========================================== \n")
+      }
       if (missing(R)){R=NaN}
       return(alr_y_reg(Y=Y,X=X,R=R,constant=constant,pres=pres))
     }
@@ -1702,15 +1764,6 @@ ilr_x_impacts = function(results){ # the unique argument is the named list that 
 ```
 
 
-- INTRODUCE ALSO: (1) 
-  impacts of Z variables in the impacts(ilr_x_reg(...))
-  
-- MEETING (3)
-
-- PERSONALIZATION ISSUE (4)
-- CONSTANT ISSUE (5)
-
-
 ## alr_x_impacts
 
 ```{r}
@@ -1735,7 +1788,8 @@ alr_x_impacts = function(results){ # the unique argument is the named list that 
       if (is.null(dim(B))){B=t(matrix(B))}
       bstar = B[h:(h+dimx-2),]
       h=h+dimx-1
-      impacts[[i]]=t(F_D(dimx))%*%bstar
+      impact_i = t(F_D(dimx))%*%bstar
+      impacts[[i]]= t(inv_permutation_D(t(impact_i),R[[i]]))
     }
     cc=1
     for (k in (1:length(impacts))){
@@ -1760,7 +1814,7 @@ alr_x_impacts = function(results){ # the unique argument is the named list that 
 ## ilr_y_reg
 
 ```{r}
-ilr_y_reg = function(Y,X,V=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
+ilr_y_reg = function(Y,X,V=list(matrix()),constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
 # pres = TRUE to print with a better presentation (name of variables and sd if it is the case) of B and B*.
   
   if (constant){x_col_names = c("intercept")}
@@ -1792,13 +1846,13 @@ ilr_y_reg = function(Y,X,V=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
   }
   
   # transform Y to coordinates
-  if (!is.na(V)){ # if V specified as argument
-    ty = ilr(Y,V)
+  if (!is.na(V[[1]][1,1])){ # if V specified as argument
+    ty = ilr(Y,V[[1]])
   }
   
   else{
-    V=V_D(dim(Y)[2]) # if V not specified as argument
-    ty=ilr(Y,V)}
+    V=list(V_D(dim(Y)[2])) # if V not specified as argument
+    ty=ilr(Y,V[[1]])}
   
   if (sum(is.na(ty))>0){stop("There are NAs in the Y variable.")}
   if (sum(is.na(tx))>0){stop("There are NAs in the X variable.")}
@@ -1821,7 +1875,7 @@ ilr_y_reg = function(Y,X,V=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
   print(Bstar)
   print("---------------------------")}
   if (constant==TRUE){
-    b0=inverseilr(t(Bstar[1,]),V)
+    b0=inverseilr(t(Bstar[1,]),V[[1]])
     Bs = rbind(Bs, b0)
     if (verbose){
     print("b0 in the simplex:")
@@ -1837,7 +1891,7 @@ ilr_y_reg = function(Y,X,V=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
       if (h==(h+dimx-1)){matrix_x = t(matrix(Bstar[h,]))}
       if (h!=(h+dimx-1)){matrix_x = Bstar[h:(h+dimx-1),]} # it is non comp, it does not lose a dimension in the transformation
       h=h+dimx
-      c_k = inverseilr(matrix_x, V)
+      c_k = inverseilr(matrix_x, V[[1]])
       Bs = rbind(Bs, c_k)
       if (verbose){print(c_k)}
     }
@@ -1925,14 +1979,22 @@ ilr_y_reg = function(Y,X,V=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
     colnames(dfilr) = cnames
     
     
-    print("      B (COEFFICIENTS IN THE SIMPLEX):      ")
-    print(as.matrix(dfsimplex))
-    print("--------------------------------------------")
-    print("     B* (COEF. and SD IN THE ILR SPACE):    ")
-    print(as.matrix(dfilr))
-    print("--------------------------------------------")
-    print(paste("n obs  : ", dim(tx)[1], sep="")) 
-    print(paste("SSR    : ", sum(resid^2), sep="")) # sum of squared residuals
+    colnames(dfsimplex) = colnames(Bs)
+    rownames(dfsimplex) = rownames(Bs) 
+    
+    arg1 = "      B (COEFFICIENTS IN THE SIMPLEX):      "
+    arg2 = as.matrix(dfsimplex)
+    arg3 = "--------------------------------------------"
+    arg4 = "     B* (COEF. and SD IN THE ALR SPACE):    "
+    arg5 = as.matrix(dfilr)
+    arg6 = "--------------------------------------------"
+    arg7 = paste("n obs  : ", dim(tx)[1], sep="")
+    arg8 = paste("SSR    : ", sum(resid^2), sep="") # sum of squared residuals
+    cat(arg1,"\n")
+    print(arg2)
+    cat(arg3,"\n", arg4,"\n")
+    print(arg5)
+    cat(arg6,"\n", arg7,"\n", arg8,"\n")
   }
 }
 ```
@@ -1941,7 +2003,7 @@ ilr_y_reg = function(Y,X,V=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
 ## alr_y_reg
 
 ```{r}
-alr_y_reg = function(Y,X,R=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
+alr_y_reg = function(Y,X,R=list(NULL),constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
 # pres = TRUE to print with a better presentation (name of variables and sd if it is the case) of B and B*.
 
   
@@ -1974,13 +2036,13 @@ alr_y_reg = function(Y,X,R=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
   }
   
   # transform Y to coordinates
-  if (!is.na(R)){ # if R specified as argument
-    ty = alr(Y,R)
+  if (!is.null(R[[1]])){ # if R specified as argument
+    ty = alr(Y,R[[1]])
   }
   
   else{
-    R=dim(Y)[2] # if R not specified as argument
-    ty=alr(Y,R)}
+    R=list(dim(Y)[2]) # if R not specified as argument
+    ty=alr(Y,R[[1]])}
   
   if (sum(is.na(ty))>0){stop("There are NAs in the Y variable.")}
   if (sum(is.na(tx))>0){stop("There are NAs in the X variable.")}
@@ -2003,7 +2065,7 @@ alr_y_reg = function(Y,X,R=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
   print(Bstar)
   print("---------------------------")}
   if (constant==TRUE){
-    b0=inversealr(t(Bstar[1,]),R)
+    b0=inversealr(t(Bstar[1,]),R[[1]])
     Bs = rbind(Bs, b0)
     if (verbose){
     print("b0 in the simplex:")
@@ -2018,7 +2080,7 @@ alr_y_reg = function(Y,X,R=NaN,constant=TRUE, verbose=FALSE, pres=FALSE){ # Y de
       if (h==(h+dimx-1)){matrix_x = t(matrix(Bstar[h,]))}
       if (h!=(h+dimx-1)){matrix_x = Bstar[h:(h+dimx-1),]} # it is non comp, it does not lose a dimension in the transformation
       h=h+dimx
-      c_k = inversealr(matrix_x, R)
+      c_k = inversealr(matrix_x, R[[1]])
       Bs = rbind(Bs, c_k)
       if (verbose){print(c_k)}
     }
@@ -2084,38 +2146,46 @@ if (pres=="TRUE"){
 
     
     # B star and sds
-    dfilr = data.frame(Bstar)
+    dfalr = data.frame(Bstar)
     
     
     # sds
     dimilr = dim(Y)[2]-1
-    nc = dim(dfilr)[1]
+    nc = dim(dfalr)[1]
     for (i in dimilr:1){
-      if (i==dimilr){dfilr = cbind(dfilr,matrix(nrow=nc))}
+      if (i==dimilr){dfalr = cbind(dfalr,matrix(nrow=nc))}
       else{
-        dfilr = cbind(dfilr[,1:i],matrix(nrow=nc),dfilr[,(i+1):(dim(dfilr)[2])])
+        dfalr = cbind(dfalr[,1:i],matrix(nrow=nc),dfalr[,(i+1):(dim(dfalr)[2])])
       }
     }
     
-    dfilr = t(dfilr)
+    dfalr = t(dfalr)
     
     for (i in 1:(dim(bcov)[1])){
-      dfilr[2*i] = sqrt(bcov[i,i]) # standard deviation as sqrt of var
+      dfalr[2*i] = sqrt(bcov[i,i]) # standard deviation as sqrt of var
     }
-    dfilr = t(dfilr)
+    dfalr = t(dfalr)
     
-    rownames(dfilr) = rname
-    colnames(dfilr) = cnames
+    rownames(dfalr) = rname
+    colnames(dfalr) = cnames
     
     
-    print("      B (COEFFICIENTS IN THE SIMPLEX):      ")
-    print(as.matrix(dfsimplex))
-    print("--------------------------------------------")
-    print("     B* (COEF. and SD IN THE ILR SPACE):    ")
-    print(as.matrix(dfilr))
-    print("--------------------------------------------")
-    print(paste("n obs  : ", dim(tx)[1], sep="")) 
-    print(paste("SSR    : ", sum(resid^2), sep="")) # sum of squared residuals
+    colnames(dfsimplex) = colnames(Bs)
+    rownames(dfsimplex) = rownames(Bs) 
+    
+    arg1 = "      B (COEFFICIENTS IN THE SIMPLEX):      "
+    arg2 = as.matrix(dfsimplex)
+    arg3 = "--------------------------------------------"
+    arg4 = "     B* (COEF. and SD IN THE ALR SPACE):    "
+    arg5 = as.matrix(dfalr)
+    arg6 = "--------------------------------------------"
+    arg7 = paste("n obs  : ", dim(tx)[1], sep="")
+    arg8 = paste("SSR    : ", sum(resid^2), sep="") # sum of squared residuals
+    cat(arg1,"\n")
+    print(arg2)
+    cat(arg3,"\n", arg4,"\n")
+    print(arg5)
+    cat(arg6,"\n", arg7,"\n", arg8,"\n")
   }
 }
 ```
@@ -2161,7 +2231,6 @@ ilr_y_impacts = function(results){ #results argument regers to the output of ilr
 
 ```{r}
 alr_y_impacts = function(results){ #results argument regers to the output of ilr_y_reg
-  # first we need EY*
   constant = results$constant
   Bcoord = results$B_coord
   coln = colnames(results$B_simplex)
@@ -2169,13 +2238,15 @@ alr_y_impacts = function(results){ #results argument regers to the output of ilr
   R = attr(results$Y_coord, "reference")
   xcoord = results$X_coord
   EYcoord = xcoord%*%Bcoord
-  EYsimpl = inversealr(EYcoord,R)
+  Re=dim(EYcoord)[2]+1
+  EYsimpl = inversealr(EYcoord,Re)
   D = dim(EYcoord)[2]+1
   impacts=list()
   for (i in 1:(dim(EYsimpl)[1])){
-    Wi = diag(D) - matrix(1,D,1)%*%t(EYsimpl[i,]) # Wi are the same in both cases
-    Wistar = Wi%*%P_D(D) #this is the only important thing that changes
+    Wi = diag(D) - matrix(1,D,1)%*%t(EYsimpl[i,]) 
+    Wistar = Wi%*%P_D(D) 
     tempres = t(Wistar%*%t(Bcoord))
+    tempres = inv_permutation_D(tempres,R)
     colnames(tempres) = coln
     rownames(tempres) = rown
     if (constant){
