@@ -192,6 +192,7 @@ b_cov = function(X,Y,B){
 
 ## Transform every variable (ILR or not, not ALR) to ILR
 
+
 ```{r}
 var2ilr = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE){ 
   
@@ -329,6 +330,15 @@ var2ilr = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE){
 }
 ```
 
+
+```{r}
+ilr_yx_reg(m1,list(m2),pres=TRUE,constant=FALSE)
+alr_yx_reg(m1,list(m2),pres=TRUE,constant=FALSE)
+```
+
+
+
+
 ## ILR yx reg
 
 ```{r}
@@ -371,7 +381,7 @@ ilr_yx_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbo
   }
   else{y_col_names = colnames(Y)}
   
-  input = var2ilr(Y,X,Z,V,constant)
+  input = var2ilr(Y,X,Z,V=V,constant = constant)
   ty = input$Y
   tx = input$X
 
@@ -380,7 +390,6 @@ ilr_yx_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbo
   
   constant = input$constant
   V = input$V
-  
   
   if (verbose){
   print("yx REGRESSION")
@@ -399,14 +408,15 @@ ilr_yx_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbo
   print("B* in the coordinates space:")
   print(Bstar)
   print("---------------------------")}
+  h=1
   if (constant==TRUE){
+    h=2
     b0=inverseilr(t(Bstar[1,]),V[[1]])
     Bs = rbind(Bs, b0)
     if (verbose){
     print("b0 in the simplex:")
     print(b0)}
   }
-  h=2
   if (verbose){print("---------------------------")}
   for (i in 1:length(X)){
     if (verbose){print(paste("B (in the simplex) for the comp. variable, X", i, sep=""))}
@@ -557,7 +567,6 @@ ilr_yx_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbo
   }
 }
 ```
-
 
 ## Transform every variable to ALR
 
@@ -851,14 +860,15 @@ alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=F
   print("B* in the coordinates space:")
   print(Bstar)
   print("---------------------------")}
+  h=1
   if (constant==TRUE){
+    h=2
     b0=inversealr(t(Bstar[1,]),R[[1]])
     Bs = rbind(Bs, b0)
     if (verbose){
     print("b0 in the simplex:")
     print(b0)}
   }
-  h=2
   if (verbose){print("---------------------------")}
   for (i in 1:length(X)){
     if (verbose){print(paste("B (in the simplex) for the comp. variable, X", i, sep=""))}
@@ -1022,8 +1032,6 @@ alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=F
 ```
 
 
-
-
 ## yx impacts (ilr)
 
 ```{r}
@@ -1082,7 +1090,6 @@ alr_yx_impacts = function(results){ # the unique argument is the named list that
     return(impacts)
 }
 ```
-
 
 
 
@@ -1165,14 +1172,16 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbos
   print("B* in the coordinates space:")
   print(Bstar)
   print("---------------------------")}
+  h=1
   if (constant==TRUE){
     b0=Bstar[1,]
     Bs=as.matrix(rbind(Bs, Bstar[1,]))
     if (verbose){
     print("b0 in the simplex:")
     print(b0)}
+    h=2
   }
-  h=2
+
   if (verbose){print("---------------------------")}
   for (i in 1:length(X)){
     if (verbose){print(paste("B (in the simplex) for the comp. variable, X", i, sep=""))}
@@ -1411,14 +1420,15 @@ alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FA
   print("B* in the coordinates space:")
   print(Bstar)
   print("---------------------------")}
+  h=1
   if (constant==TRUE){
+    h=2
     b0=Bstar[1,]
     Bs=rbind(Bs, Bstar[1,])
     if (verbose){
     print("b0 in the simplex:")
     print(b0)}
   }
-  h=2
   xdimlist=list()
   if (verbose){print("---------------------------")}
   for (i in 1:length(X)){
@@ -1716,7 +1726,6 @@ reg = function(dataset, formula, transformation = "ILR", pres=FALSE, V=list(matr
 }
 ```
 
-
 ## ilr_x_impacts
 
 ```{r}
@@ -1874,14 +1883,15 @@ ilr_y_reg = function(Y,X,V=list(matrix()),constant=TRUE, verbose=FALSE, pres=FAL
   print("B* in the coordinates space:")
   print(Bstar)
   print("---------------------------")}
+  h=1
   if (constant==TRUE){
+    h=2
     b0=inverseilr(t(Bstar[1,]),V[[1]])
     Bs = rbind(Bs, b0)
     if (verbose){
     print("b0 in the simplex:")
     print(b0)}
   }
-  h=2
   if (verbose){print("---------------------------")}
   if (!is.na(X[[1]][1,1])){
     for (i in 1:length(X)){
@@ -2059,19 +2069,20 @@ alr_y_reg = function(Y,X,R=list(NULL),constant=TRUE, verbose=FALSE, pres=FALSE){
   Bstar = mlm(ty,tx)
   bcov = b_cov(tx,ty,Bstar) 
   Bs = t(matrix(numeric(dim(Y)[2])))
+  h=1
   
   if (verbose){
   print("B* in the coordinates space:")
   print(Bstar)
   print("---------------------------")}
   if (constant==TRUE){
+    h=2
     b0=inversealr(t(Bstar[1,]),R[[1]])
     Bs = rbind(Bs, b0)
     if (verbose){
     print("b0 in the simplex:")
     print(b0)}
   }
-  h=2
   if (verbose){print("---------------------------")}
   if (!is.na(X[[1]][1,1])){
     for (i in 1:length(X)){
@@ -2190,6 +2201,9 @@ if (pres=="TRUE"){
 }
 ```
 
+
+
+
 ## ILR y impacts
 
 ```{r}
@@ -2224,7 +2238,6 @@ ilr_y_impacts = function(results){ #results argument regers to the output of ilr
   return(impacts)
 }
 ```
-
 
 
 ## ALR y impacts 
@@ -2324,7 +2337,9 @@ share_ratio_summary = function(results){
   Bs = results$B_simplex
   xnames = rownames(Bs)
   constant = results$constant
+  hh=0
   if (constant){
+    hh=1
     if (dim(Bs)[1]==2){
       Bs = t(as.matrix(Bs[-1,]))
       rownames(Bs) = c(xnames[[2]])}
@@ -2342,10 +2357,8 @@ share_ratio_summary = function(results){
     }
     colnames(matres) = colnames(Bs)
     rownames(matres) = colnames(Bs)
-    res[[xnames[[k+1]]]] = matres
+    res[[xnames[[k+hh]]]] = matres
   }
   return(res)
 }
 ```
-
-
