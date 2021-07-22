@@ -331,11 +331,6 @@ var2ilr = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE){
 ```
 
 
-```{r}
-ilr_yx_reg(m1,list(m2),pres=TRUE,constant=FALSE)
-alr_yx_reg(m1,list(m2),pres=TRUE,constant=FALSE)
-```
-
 
 
 
@@ -1673,7 +1668,7 @@ check_formula = function(dataset, formula){ # returns a list of X, a list of Y, 
 ## general regression function
 
 ```{r}
-reg = function(dataset, formula, transformation = "ILR", pres=FALSE, V=list(matrix()), R){
+reg = function(dataset, formula, transformation = "ILR", pres=FALSE, V=list(matrix()), R=list(NULL)){
   input = check_formula(dataset, formula)
   Y = input$Y
   X = input$X
@@ -1705,21 +1700,18 @@ reg = function(dataset, formula, transformation = "ILR", pres=FALSE, V=list(matr
       if (pres){
       cat("YX-compositional model. ALR transformation. \n", "========================================== \n")
       }
-      if (missing(R)){R=list(NULL)}
       return(alr_yx_reg(Y=Y,X=X,Z=Z,R=R,constant=constant,pres=pres))
     }
     if (model_type == "x_reg"){
       if (pres){
       cat("X-compositional model. ALR transformation. \n", "========================================== \n")
       }
-      if (missing(R)){R=list(NULL)}
       return(alr_x_reg(Y=Y,X=X,Z=Z,R=R,constant=constant,pres=pres))
     }
     if (model_type == "y_reg"){
       if (pres){
       cat("Y-compositional model. ALR transformation. \n", "========================================== \n")
       }
-      if (missing(R)){R=NaN}
       return(alr_y_reg(Y=Y,X=X,R=R,constant=constant,pres=pres))
     }
   }
@@ -2362,3 +2354,56 @@ share_ratio_summary = function(results){
   return(res)
 }
 ```
+
+### p_values 
+
+```{r}
+p_values = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=list(NULL), B=1000, seed=31000){
+  results = list()
+  set.seed(seed)
+  for (b in 1:B){
+    ids <- sample(x=nrow(dataset), size=dim(dataset)[1], replace=T)
+    sample_b <- dataset[ids,]
+    rownames(sample_b) = NULL
+    coefs_b = reg(dataset = sample_b, formula = formula, transformation = transformation, V=V, R=R, pres=F)$B_simplex
+    results[[b]] = coefs_b
+  }
+  pvals = results[[1]]
+  attr(pvals,"space")=NULL
+  P = dim(pvals)[1]
+  for (i in 1:(dim(pvals)[1])){
+    for (j in 1:(dim(pvals)[2])){
+      dist = c()
+      for (b in 1:B){
+        dist = c(dist, results[[b]][i,j])
+      }
+      lowers = sum(dist<(1/P))/B
+      pvals[i,j] = 2*min(lowers,1-lowers)
+    }
+  }
+  return(pvals)
+}
+```
+
+
+
+
+```{r}
+p_values_intercept <- c(length(which((coeff_simplex_B_longer[
+  (coeff_simplex_B_longer$var == "(Intercept)") & (coeff_simplex_B_longer$parti == "Left"), 
+  "coeff"] > 1/3))) / B,
+  length(which((coeff_simplex_B_longer[
+    (coeff_simplex_B_longer$var == "(Intercept)") & (coeff_simplex_B_longer$parti == "Right"), 
+    "coeff"] > 1/3))) / B,
+  length(which((coeff_simplex_B_longer[
+    (coeff_simplex_B_longer$var == "(Intercept)") & (coeff_simplex_B_longer$parti == "XR"), 
+    "coeff"] > 1/3))) / B)
+p_values_intercept <- 2 * pmin(p_values_intercept, 1 - p_values_intercept)
+```
+
+
+
+
+
+
+
