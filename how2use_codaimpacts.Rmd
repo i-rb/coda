@@ -342,7 +342,7 @@ var2ilr = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE){
 
 # VERSION 2.0.0 (with attributes and using the var2ilr function)
 
-ilr_yx_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
+ilr_yx_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
 # pres = TRUE to print with a better presentation (name of variables and sd if it is the case) of B and B*.
   
   if (constant){x_col_names = c("intercept")}
@@ -385,37 +385,18 @@ ilr_yx_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbo
   
   constant = input$constant
   V = input$V
-  
-  if (verbose){
-  print("yx REGRESSION")
-  print("===========================")
-  
-  print("ILR Y-Matrix")
-  print(ty)
-  print("ILR X-Matrix")
-  print(tx)}
 
   Bstar = mlm(ty,tx)
   bcov = b_cov(tx,ty,Bstar)
   Bs = t(matrix(numeric(dim(Y)[2])))
   
-  if (verbose){
-  print("B* in the coordinates space:")
-  print(Bstar)
-  print("---------------------------")}
   h=1
   if (constant==TRUE){
     h=2
     b0=inverseilr(t(Bstar[1,]),V[[1]])
     Bs = rbind(Bs, b0)
-    if (verbose){
-    print("b0 in the simplex:")
-    print(b0)}
   }
-  if (verbose){print("---------------------------")}
   for (i in 1:length(X)){
-    if (verbose){print(paste("B (in the simplex) for the comp. variable, X", i, sep=""))}
-    # number of parts?
     if (is.null(attr(X[[i]],"space"))){dimx = dim(X[[i]])[2]} #number of parts of this variable i of X D parts --> D-1 param in the ilr 
     if (!is.null(attr(X[[i]],"space"))){
       if (attr(X[[i]],"space")=="simplex"){
@@ -428,20 +409,16 @@ ilr_yx_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbo
     B_q = V[[1]]%*%t(matrix_x)%*%t(V[[i+1]])
     Bs= rbind(Bs, t(B_q))
     h=h+dimx-1
-    if (verbose){print(t(B_q))}
   }
-  if (verbose){print("---------------------------")}
   
   if (!is.na(Z[[1]][1,1])){
     for (i in 1:length(Z)){
-      if (verbose){print(paste("B (in the simplex) for the non-comp. variable, Z", i, sep=""))}
       dimz = dim(Z[[i]])[2]
       if (h==(h+dimz-1)){matrix_z = t(matrix(Bstar[h,]))}
       if (h!=(h+dimz-1)){matrix_z = Bstar[h:(h+dimz-1),]} # it is non comp, it does not lose a dimension in the transformation
       h=h+dimz
       c_k = inverseilr(matrix_z, V[[1]])
       Bs = rbind(Bs, c_k)
-      if (verbose){print(c_k)}
     }
   }
   Bs = Bs[-1,]
@@ -784,7 +761,7 @@ inv_permutation_D = function(mat,P){ # undoes the permutation
 ## ALR yx reg
 
 ```{r}
-alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of reference variables order: (Y, X1, X2, ...) 
+alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of reference variables order: (Y, X1, X2, ...) 
 # pres = TRUE to print with a better presentation (name of variables and sd if it is the case) of B and B*.
   
   if (constant){x_col_names = c("intercept")}
@@ -837,37 +814,18 @@ alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=F
   if (sum(is.na(tx))>0){stop("There are NAs in the X variable.")}
   dimy = dim(ty)[2]+1
   constant = input$constant
-  
-  if (verbose){
-  print("yx REGRESSION")
-  print("===========================")
-  
-  print("ALR Y-Matrix")
-  print(ty)
-  print("ALR X-Matrix")
-  print(tx)}
 
   Bstar = mlm(ty,tx)
   bcov = b_cov(tx,ty,Bstar)
   Bs = t(matrix(numeric(dim(Y)[2])))
   
-  if (verbose){
-  print("B* in the coordinates space:")
-  print(Bstar)
-  print("---------------------------")}
   h=1
   if (constant==TRUE){
     h=2
     b0=inversealr(t(Bstar[1,]),R[[1]])
     Bs = rbind(Bs, b0)
-    if (verbose){
-    print("b0 in the simplex:")
-    print(b0)}
   }
-  if (verbose){print("---------------------------")}
   for (i in 1:length(X)){
-    if (verbose){print(paste("B (in the simplex) for the comp. variable, X", i, sep=""))}
-    # number of parts?
     if (is.null(attr(X[[i]],"space"))){dimx = dim(X[[i]])[2]} #number of parts of this variable i of X D parts --> D-1 param in the alr 
     if (!is.null(attr(X[[i]],"space"))){
       if (attr(X[[i]],"space")=="simplex"){
@@ -882,10 +840,8 @@ alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=F
     B_q = t(inv_permutation_D(t(B_q),R[[i+1]]))
     Bs= rbind(Bs, B_q)
     h=h+dimx-1
-    if (verbose){print(B_q)}
   }
-  if (verbose){print("---------------------------")}
-  
+
   Bs = Bs[-1,]
   if (constant){
     Bsintercept = Bs[1,]
@@ -898,14 +854,12 @@ alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=F
   
   if (!is.na(Z[[1]][1,1])){
     for (i in 1:length(Z)){
-      if (verbose){print(paste("B (in the simplex) for the non-comp. variable, Z", i, sep=""))}
       dimz = dim(Z[[i]])[2]
       if (h==(h+dimz-1)){matrix_z = t(matrix(Bstar[h,]))}
       if (h!=(h+dimz-1)){matrix_z = Bstar[h:(h+dimz-1),]} # it is non comp, it does not lose a dimension in the transformation
       h=h+dimz
       c_k = inversealr(matrix_z, R[[1]]) 
       Bs = rbind(Bs, c_k)
-      if (verbose){print(c_k)}
     }
   }
 
@@ -1092,7 +1046,7 @@ alr_yx_impacts = function(results){ # the unique argument is the named list that
 ## ILR x reg
 
 ```{r}
-ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
+ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
 # pres = TRUE toprint with a better presentation (name of variables and sd if it is the case) of B and B*.
 
   if (constant){x_col_names = c("intercept")}
@@ -1148,39 +1102,19 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbos
   
   if (sum(is.na(ty))>0){stop("There are NAs in the Y variable.")}
   if (sum(is.na(tx))>0){stop("There are NAs in the X variable.")}
-  
-  
-  if (verbose){
-  print("yx REGRESSION")
-  print("===========================")
-  
-  print("ILR Y-Matrix")
-  print(ty)
-  print("ILR X-Matrix")
-  print(tx)}
 
   Bstar = mlm(ty,tx)
   bcov = b_cov(tx,ty,Bstar)
   Bs = as.matrix(t(matrix(numeric(dim(Y)[2]))))
   
-  if (verbose){
-  print("B* in the coordinates space:")
-  print(Bstar)
-  print("---------------------------")}
   h=1
   if (constant==TRUE){
     b0=Bstar[1,]
     Bs=as.matrix(rbind(Bs, Bstar[1,]))
-    if (verbose){
-    print("b0 in the simplex:")
-    print(b0)}
     h=2
   }
 
-  if (verbose){print("---------------------------")}
   for (i in 1:length(X)){
-    if (verbose){print(paste("B (in the simplex) for the comp. variable, X", i, sep=""))}
-    # number of parts?
     if (is.null(attr(X[[i]],"space"))){dimx = dim(X[[i]])[2]} #number of parts of this variable i of X D parts --> D-1 param in the ilr 
     if (!is.null(attr(X[[i]],"space"))){
       if (attr(X[[i]],"space")=="simplex"){
@@ -1193,20 +1127,16 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbos
     B_q = as.matrix(t(matrix_x)%*%t(V[[i]]))
     Bs= as.matrix(rbind(Bs, t(B_q)))
     h=h+dimx-1
-    if (verbose){print(t(B_q))}
   }
-  if (verbose){print("---------------------------")}
-  
+
   if (!is.na(Z[[1]][1,1])){
     for (i in 1:length(Z)){
-      if (verbose){print(paste("B (in the simplex) for the non-comp. variable, Z", i, sep=""))}
       dimz = dim(Z[[i]])[2]
       if (h==(h+dimz-1)){matrix_z = t(matrix(Bstar[h,]))}
       if (h!=(h+dimz-1)){matrix_z = Bstar[h:(h+dimz-1),]} # it is non comp, it does not lose a dimension in the transformation
       h=h+dimz
       c_k = as.matrix(matrix_z)
       Bs = as.matrix(rbind(Bs, c_k))
-      if (verbose){print(c_k)}
     }
   }
   Bs = as.matrix(Bs[-1,])
@@ -1333,7 +1263,7 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, verbos
 ## ALR x reg
 
 ```{r}
-alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
+alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
 # pres = TRUE to print with a better presentation (name of variables and sd if it is the case) of B and B*.
   
   if (constant){x_col_names = c("intercept")}
@@ -1396,39 +1326,19 @@ alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FA
   
   if (sum(is.na(ty))>0){stop("There are NAs in the Y variable.")}
   if (sum(is.na(tx))>0){stop("There are NAs in the X variable.")}
-  
-  
-  if (verbose){
-  print("yx REGRESSION")
-  print("===========================")
-  
-  print("ALR Y-Matrix")
-  print(ty)
-  print("ALR X-Matrix")
-  print(tx)}
 
   Bstar = mlm(ty,tx)
   bcov = b_cov(tx,ty,Bstar)
   Bs = t(matrix(numeric(dim(Y)[2])))
-  
-  if (verbose){
-  print("B* in the coordinates space:")
-  print(Bstar)
-  print("---------------------------")}
+
   h=1
   if (constant==TRUE){
     h=2
     b0=Bstar[1,]
     Bs=rbind(Bs, Bstar[1,])
-    if (verbose){
-    print("b0 in the simplex:")
-    print(b0)}
   }
   xdimlist=list()
-  if (verbose){print("---------------------------")}
   for (i in 1:length(X)){
-    if (verbose){print(paste("B (in the simplex) for the comp. variable, X", i, sep=""))}
-    # number of parts?
     if (is.null(attr(X[[i]],"space"))){dimx = dim(X[[i]])[2]} #number of parts of this variable i of X D parts --> D-1 param in the ilr 
     if (!is.null(attr(X[[i]],"space"))){
       if (attr(X[[i]],"space")=="simplex"){
@@ -1443,20 +1353,16 @@ alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, verbose=FA
     B_q = inv_permutation_D(B_q, R[[i]])
     Bs= rbind(Bs, t(B_q))
     h=h+dimx-1
-    if (verbose){print(t(B_q))}
   }
-  if (verbose){print("---------------------------")}
-  
+
   if (!is.na(Z[[1]][1,1])){
     for (i in 1:length(Z)){
-      if (verbose){print(paste("B (in the simplex) for the non-comp. variable, Z", i, sep=""))}
       dimz = dim(Z[[i]])[2]
       if (h==(h+dimz-1)){matrix_z = t(matrix(Bstar[h,]))}
       if (h!=(h+dimz-1)){matrix_z = Bstar[h:(h+dimz-1),]} # it is non comp, it does not lose a dimension in the transformation
       h=h+dimz
       c_k = as.matrix(matrix_z)
       Bs = rbind(Bs, c_k)
-      if (verbose){print(c_k)}
     }
   }
   Bs = as.matrix(Bs[-1,])
@@ -1815,7 +1721,7 @@ alr_x_impacts = function(results){ # the unique argument is the named list that 
 ## ilr_y_reg
 
 ```{r}
-ilr_y_reg = function(Y,X,V=list(matrix()),constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
+ilr_y_reg = function(Y,X,V=list(matrix()),constant=TRUE, pres=FALSE){ # Y dependent, X indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
 # pres = TRUE to print with a better presentation (name of variables and sd if it is the case) of B and B*.
   
   if (constant){x_col_names = c("intercept")}
@@ -1858,36 +1764,18 @@ ilr_y_reg = function(Y,X,V=list(matrix()),constant=TRUE, verbose=FALSE, pres=FAL
   if (sum(is.na(ty))>0){stop("There are NAs in the Y variable.")}
   if (sum(is.na(tx))>0){stop("There are NAs in the X variable.")}
   
-  if (verbose){
-  print("yx REGRESSION")
-  print("===========================")
-  
-  print("ILR Y-Matrix")
-  print(ty)
-  print("ILR X-Matrix")
-  print(tx)}
-  
   Bstar = mlm(ty,tx)
   bcov = b_cov(tx,ty,Bstar) 
   Bs = t(matrix(numeric(dim(Y)[2])))
   
-  if (verbose){
-  print("B* in the coordinates space:")
-  print(Bstar)
-  print("---------------------------")}
   h=1
   if (constant==TRUE){
     h=2
     b0=inverseilr(t(Bstar[1,]),V[[1]])
     Bs = rbind(Bs, b0)
-    if (verbose){
-    print("b0 in the simplex:")
-    print(b0)}
   }
-  if (verbose){print("---------------------------")}
   if (!is.na(X[[1]][1,1])){
     for (i in 1:length(X)){
-      if (verbose){print(paste("B (in the simplex) for the non-comp. variable, X", i, sep=""))}
       dimx = dim(X[[i]])[2]
       matrix_x = Bstar[h:(h+dimx-1),]
       if (h==(h+dimx-1)){matrix_x = t(matrix(Bstar[h,]))}
@@ -1895,7 +1783,6 @@ ilr_y_reg = function(Y,X,V=list(matrix()),constant=TRUE, verbose=FALSE, pres=FAL
       h=h+dimx
       c_k = inverseilr(matrix_x, V[[1]])
       Bs = rbind(Bs, c_k)
-      if (verbose){print(c_k)}
     }
   }
   Bs = Bs[-1,]
@@ -2005,7 +1892,7 @@ ilr_y_reg = function(Y,X,V=list(matrix()),constant=TRUE, verbose=FALSE, pres=FAL
 ## alr_y_reg
 
 ```{r}
-alr_y_reg = function(Y,X,R=list(NULL),constant=TRUE, verbose=FALSE, pres=FALSE){ # Y dependent, X indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
+alr_y_reg = function(Y,X,R=list(NULL),constant=TRUE, pres=FALSE){ # Y dependent, X indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
 # pres = TRUE to print with a better presentation (name of variables and sd if it is the case) of B and B*.
 
   
@@ -2049,43 +1936,24 @@ alr_y_reg = function(Y,X,R=list(NULL),constant=TRUE, verbose=FALSE, pres=FALSE){
   if (sum(is.na(ty))>0){stop("There are NAs in the Y variable.")}
   if (sum(is.na(tx))>0){stop("There are NAs in the X variable.")}
   
-  if (verbose){
-  print("Y REGRESSION")
-  print("===========================")
-  
-  print("ALR Y-Matrix")
-  print(ty)
-  print("ALR X-Matrix")
-  print(tx)}
-  
   Bstar = mlm(ty,tx)
   bcov = b_cov(tx,ty,Bstar) 
   Bs = t(matrix(numeric(dim(Y)[2])))
   h=1
   
-  if (verbose){
-  print("B* in the coordinates space:")
-  print(Bstar)
-  print("---------------------------")}
   if (constant==TRUE){
     h=2
     b0=inversealr(t(Bstar[1,]),R[[1]])
     Bs = rbind(Bs, b0)
-    if (verbose){
-    print("b0 in the simplex:")
-    print(b0)}
   }
-  if (verbose){print("---------------------------")}
   if (!is.na(X[[1]][1,1])){
     for (i in 1:length(X)){
-      if (verbose){print(paste("B (in the simplex) for the non-comp. variable, X", i, sep=""))}
       dimx = dim(X[[i]])[2]
       if (h==(h+dimx-1)){matrix_x = t(matrix(Bstar[h,]))}
       if (h!=(h+dimx-1)){matrix_x = Bstar[h:(h+dimx-1),]} # it is non comp, it does not lose a dimension in the transformation
       h=h+dimx
       c_k = inversealr(matrix_x, R[[1]])
       Bs = rbind(Bs, c_k)
-      if (verbose){print(c_k)}
     }
   }
   Bs = Bs[-1,]
@@ -2358,7 +2226,7 @@ share_ratio_summary = function(results){
 ### p_values 
 
 ```{r}
-p_values = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=list(NULL), B=1000, seed=31000){
+p_values_coef = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=list(NULL), B=1000, seed=31000){
   results = list()
   set.seed(seed)
   for (b in 1:B){
@@ -2370,7 +2238,7 @@ p_values = function(dataset, formula, transformation = "ILR", V=list(matrix()), 
   }
   pvals = results[[1]]
   attr(pvals,"space")=NULL
-  P = dim(pvals)[1]
+  P = dim(pvals)[2]
   for (i in 1:(dim(pvals)[1])){
     for (j in 1:(dim(pvals)[2])){
       dist = c()
@@ -2381,27 +2249,270 @@ p_values = function(dataset, formula, transformation = "ILR", V=list(matrix()), 
       pvals[i,j] = 2*min(lowers,1-lowers)
     }
   }
+  cat("P-values for coefficients (H0: coef = 1/#parts):\n\n")
   return(pvals)
 }
 ```
 
 
-
+Version of 'reg' including significance stars: (this should be included in the pres part of each reg, not as a separated function). This is only an example of how it should be done.
 
 ```{r}
-p_values_intercept <- c(length(which((coeff_simplex_B_longer[
-  (coeff_simplex_B_longer$var == "(Intercept)") & (coeff_simplex_B_longer$parti == "Left"), 
-  "coeff"] > 1/3))) / B,
-  length(which((coeff_simplex_B_longer[
-    (coeff_simplex_B_longer$var == "(Intercept)") & (coeff_simplex_B_longer$parti == "Right"), 
-    "coeff"] > 1/3))) / B,
-  length(which((coeff_simplex_B_longer[
-    (coeff_simplex_B_longer$var == "(Intercept)") & (coeff_simplex_B_longer$parti == "XR"), 
-    "coeff"] > 1/3))) / B)
-p_values_intercept <- 2 * pmin(p_values_intercept, 1 - p_values_intercept)
+reg2 = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=list(NULL), B=1000, seed=31000){
+  reg_res = reg(dataset = dataset, formula = formula, transformation = transformation, V=V, R=R, pres=F)
+  input = check_formula(dataset, formula)
+  Bs = reg_res$B_simplex
+  Bstar = reg_res$B_coord
+  bcov = reg_res$Bcoord_cov
+  tx = reg_res$X_coord
+  ty = reg_res$Y_coord
+  resid = reg_res$residuals_coord
+  Y = input$Y
+  X = input$X
+  Z = input$Z
+  constant=input$constant
+  
+  pvalues = p_values_coef(dataset,formula,transformation,V,R,B,seed)
+  
+  dfsimplex = data.frame(Bs)
+  name=c()
+  for (i in 1:(dim(Y)[2])){
+    name = c(name, paste("Y_", i, sep=""))
+  }
+  colnames(dfsimplex)=name
+  
+  rname = c()
+  if (constant){rname = c(rname, "intercept")}
+  for (i in 1:length(X)){
+    for (j in 1:(dim(X[[i]])[2])){
+      rname = c(rname, paste("X",i,j,sep="_"))
+    }
+  }
+  
+  if (!is.na(Z[[1]][1,1])){
+    for (i in 1:length(Z)){
+      for (j in 1:(dim(Z[[i]])[2])){
+         rname = c(rname, paste("Z",i,j,sep="_"))
+      }
+    }
+  }
+  
+  rownames(dfsimplex)=rname
+  
+  cnames = c()
+  for (i in (1:(dim(Y)[2]-1))){
+    cnames = c(cnames, paste("Yilr_",i,sep=""))
+    cnames = c(cnames, paste("(sd_Yilr_",i,")",sep=""))
+  }
+  
+  rname = c()
+  if (constant){rname = c(rname, "intercept")}
+  for (i in 1:length(X)){
+    for (j in 1:(dim(X[[i]])[2]-1)){
+      rname = c(rname, paste("X",i,j,sep="_"))
+        }
+      }
+  
+  if (!is.na(Z[[1]][1,1])){
+    for (i in 1:length(Z)){
+      for (j in 1:(dim(Z[[i]])[2])){
+         rname = c(rname, paste("Z",i,j,sep="_"))
+      }
+    }
+  }
+
+  
+  # B star and sds
+  dfilr = data.frame(Bstar)
+  
+  
+  
+  # sds
+  dimilr = dim(Y)[2]-1
+  nc = dim(dfilr)[1]
+  for (i in dimilr:1){
+    if (i==dimilr){dfilr = cbind(dfilr,matrix(nrow=nc))}
+    else{
+      dfilr = cbind(dfilr[,1:i],matrix(nrow=nc),dfilr[,(i+1):(dim(dfilr)[2])])
+    }
+  }
+  
+  dfilr = t(dfilr)
+  
+  for (i in 1:(dim(bcov)[1])){
+    dfilr[2*i] = sqrt(bcov[i,i]) # standard deviation as sqrt of var
+  }
+  dfilr = t(dfilr)
+  
+  rownames(dfilr) = rname
+  colnames(dfilr) = cnames
+  
+  sigmat = dfsimplex # copy matrix
+  
+  for (i in 1:(dim(dfsimplex)[1])){
+    for (j in 1:(dim(dfsimplex)[2])){
+      val = dfsimplex[i,j]
+      pval = pvalues[i,j]
+      if ((pval>0.05)&(pval<0.10)){
+        sigmat[i,j] = "*  "
+      }
+      if ((pval<0.05)&(pval>0.01)){
+        sigmat[i,j] = "** "
+      }
+      if (pval<0.01){
+        sigmat[i,j] = "***"
+      }
+      else{
+        sigmat[i,j] = "   "
+      }
+    }
+  }
+  
+  colnames(dfsimplex) = colnames(Bs)
+  rownames(dfsimplex) = rownames(Bs)
+  
+  
+  
+  for (i in dim(sigmat)[2]:1){
+    orignames = colnames(dfsimplex)
+    #nnames_i  = paste("(sig. ",orignames[[i]],")",sep="")
+    nnames_i = "   "
+    if (i==dim(sigmat)[2]){
+      newnames  = c(orignames[1:i],nnames_i)
+      newmat    = cbind(dfsimplex[,1:i],sigmat[,i])
+    }
+    else{
+      newnames  = c(orignames[1:i],nnames_i,orignames[(i+1):length(orignames)])
+      newmat    = cbind(dfsimplex[,1:i],sigmat[,i],dfsimplex[,(i+1):(dim(dfsimplex)[2])])
+    }
+    dfsimplex = newmat
+    orignames = newnames
+    colnames(dfsimplex) = orignames
+  }
+  
+  arg1 = "      B (COEFFICIENTS IN THE SIMPLEX):      "
+  arg2 = as.matrix(dfsimplex)
+  arg3 = "--------------------------------------------"
+  arg4 = "     B* (COEF. and SD IN THE ALR SPACE):    "
+  arg5 = as.matrix(dfilr)
+  arg6 = "--------------------------------------------"
+  arg7 = paste("n obs  : ", dim(tx)[1], sep="")
+  arg8 = paste("SSR    : ", sum(resid^2), sep="") # sum of squared residuals
+  cat(arg1,"\n")
+  print(arg2,quote=FALSE)
+  cat(arg3,"\n", arg4,"\n")
+  noquote(arg5)
+  cat(arg6,"\n", arg7,"\n", arg8,"\n")
+}
 ```
 
 
+### pvalues semielasticities
+
+ideas:
+
+- small variation -> enough impact to change sign? (what is 'small'?) 
+- adding noise to dataset and quantifying how much noise is needed to change the sign of the impact. (lots of problems)
+
+- [Winner]: create several datasets bootstrapping but their first observation is the observation of interest (that whose p-value is desired to compute) and replicate the previous approach (for simplex coeff's pvalues)
+
+
+```{r}
+p_values_se = function(dataset, formula, observation, transformation = "ILR", V=list(matrix()), R=list(NULL), B=1000, seed=31000){
+  results = list()
+  set.seed(seed)
+  for (b in 1:B){
+    ids <- sample(x=nrow(dataset), size=dim(dataset)[1]-1, replace=T)
+    ids = c(observation,ids)
+    sample_b <- dataset[ids,]
+    rownames(sample_b) = NULL
+    impacts_i = impacts(reg(dataset = sample_b, formula = formula, transformation = transformation, V=V, R=R, pres=F))[[1]]
+    results[[b]] = impacts_i
+  }
+  rimpacts = results[[1]]
+  for (i in 1:(dim(rimpacts)[1])){
+    for (j in 1:(dim(rimpacts)[2])){
+      dist = c()
+      for (b in 1:B){
+        dist = c(dist, results[[b]][i,j])
+      }
+      lowers = sum(dist<0)/B
+      rimpacts[i,j] = 2*min(lowers,1-lowers)
+    }
+  }
+  cat("P-values for (semi-)elasticities (H0: s.e. = 0): \n\n")
+  return(rimpacts)
+}
+```
+
+### P values for x impacts (chage names or pool)
+
+
+```{r}
+p_values_coef = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=list(NULL), B=1000, seed=31000){
+  results = list()
+  set.seed(seed)
+  for (b in 1:B){
+    ids <- sample(x=nrow(dataset), size=dim(dataset)[1], replace=T)
+    sample_b <- dataset[ids,]
+    rownames(sample_b) = NULL
+    coefs_b = reg(dataset = sample_b, formula = formula, transformation = transformation, V=V, R=R, pres=F)$B_simplex
+    results[[b]] = coefs_b
+  }
+  pvals = results[[1]]
+  attr(pvals,"space")=NULL
+  P = dim(pvals)[2]
+  for (i in 1:(dim(pvals)[1])){
+    for (j in 1:(dim(pvals)[2])){
+      dist = c()
+      for (b in 1:B){
+        dist = c(dist, results[[b]][i,j])
+      }
+      lowers = sum(dist<(1/P))/B
+      pvals[i,j] = 2*min(lowers,1-lowers)
+    }
+  }
+  cat("P-values for coefficients (H0: coef = 1/#parts):\n\n")
+  return(pvals)
+}
+```
+
+This should be pooled into one pvalues function that checks the model,
+also ratio_share/imp_summary should raise an error if it is not a Y-compo model (or YX maybe?)
+
+(etc)
+
+Delete comments
+
+
+```{r}
+pvalues_x = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=list(NULL), B=1000, seed=31000){
+  results = list()
+  set.seed(seed)
+  for (b in 1:B){
+    ids <- sample(x=nrow(dataset), size=dim(dataset)[1], replace=T)
+    sample_b <- dataset[ids,]
+    rownames(sample_b) = NULL
+    coefs_b = reg(dataset = sample_b, formula = formula, transformation = transformation, V=V, R=R, pres=F)$B_simplex
+    results[[b]] = coefs_b
+  }
+  pvals = results[[1]]
+  attr(pvals,"space")=NULL
+  for (i in 1:(dim(pvals)[1])){
+    for (j in 1:(dim(pvals)[2])){
+      dist = c()
+      for (b in 1:B){
+        dist = c(dist, results[[b]][i,j])
+      }
+      lowers = sum(dist<0)/B
+      pvals[i,j] = 2*min(lowers,1-lowers)
+    }
+  }
+  cat("P-values for coefficients (H0: coef = 1/#parts):\n\n")
+  return(pvals)
+  
+}
+```
 
 
 
