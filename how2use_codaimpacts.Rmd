@@ -30,6 +30,10 @@ m4 = example_matrices()[[4]]
 m5 = example_matrices()[[5]]
 ```
 
+```{r}
+alr_x_reg(m5,list(m1,m2),list(m3))$B_simplex
+```
+
 
 ```{r}
 load("/Users/ivanrendobarreiro/coda/packageone/data/BDDSegX.RData")
@@ -840,9 +844,6 @@ alr_yx_impacts = function(results){ # the unique argument is the named list that
 }
 ```
 
-
-
-
 ## ILR x reg
 
 ```{r}
@@ -923,7 +924,7 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE){
     if (h==(h+dimx-2)){matrix_x = t(matrix(Bstar[h,]))}
     if (h!=(h+dimx-2)){matrix_x = Bstar[h:(h+dimx-2),] }
     
-    B_q = as.matrix(t(matrix_x)%*%t(V[[i]]))
+    B_q = as.matrix(closure(exp(t(matrix_x)%*%t(V[[i]]))))
     
     Bs= as.matrix(rbind(Bs, t(B_q)))
     h=h+dimx-1
@@ -1053,6 +1054,7 @@ alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE){
     if (h!=(h+dimx-2)){matrix_x = Bstar[h:(h+dimx-2),] }
     B_q = t(matrix_x)%*%F_D(dimx)
     B_q = inv_permutation_D(B_q, R[[i]])
+    B_q = closure(exp(B_q))
     Bs= rbind(Bs, t(B_q))
     h=h+dimx-1
   }
@@ -1306,6 +1308,11 @@ alr_x_impacts = function(results){ # the unique argument is the named list that 
     return(impacts_mat)
 }
 ```
+
+```{r}
+ilr_yx_reg(m1,list(m2),list(m3,m5),constant=T)$B_simplex
+```
+
 
 ## ilr_y_reg
 
