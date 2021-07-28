@@ -162,8 +162,7 @@ inversealr = function(x,R=dim(x)[2]+1){ # x = NxD-1 matrix, R original reference
 ## Estimation of the coefficients of any multivariate regression
 
 ```{r}
-mlm = function(Y,X){ # only the dependent and independent matrices are needed
-  ## use solve(t(X),Y) or QR algorithm qr.solve(), cholesky (I HAVE USED QR)
+mlm = function(Y,X){ 
   B = solve(crossprod(X),crossprod(X,Y),tol=1e-21)
   return(B)
 }
@@ -337,14 +336,7 @@ var2ilr = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE){
 ## ILR yx reg
 
 ```{r}
-# eq 4 ASJ paper (Ngyugen, Laurent, Thomas-Agnan, Ruiz-Gazen)
-
-
-# VERSION 2.0.0 (with attributes and using the var2ilr function)
-
-ilr_yx_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
-# pres = TRUE to print with a better presentation (name of variables and sd if it is the case) of B and B*.
-  
+ilr_yx_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE){
   if (constant){x_col_names = c("intercept")}
   else{x_col_names = c()}
   
@@ -440,103 +432,7 @@ ilr_yx_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, pres=
   reslist = list(Y_coord = ty, X_coord = tx, constant = constant, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
   attr(reslist,"reg_type") = "ilr_yx_reg"
   
-  if (!pres){return(reslist)} # return results if not pres
-  
-  
-  
-  # part of PRES = TRUE
-  
-  if (pres){
-    dfsimplex = data.frame(Bs)
-    name=c()
-    for (i in 1:(dim(Y)[2])){
-      name = c(name, paste("Y_", i, sep=""))
-    }
-    colnames(dfsimplex)=name
-    
-    rname = c()
-    if (constant){rname = c(rname, "intercept")}
-    for (i in 1:length(X)){
-      for (j in 1:(dim(X[[i]])[2])){
-        rname = c(rname, paste("X",i,j,sep="_"))
-      }
-    }
-    
-    if (!is.na(Z[[1]][1,1])){
-      for (i in 1:length(Z)){
-        for (j in 1:(dim(Z[[i]])[2])){
-           rname = c(rname, paste("Z",i,j,sep="_"))
-        }
-      }
-    }
-    
-    rownames(dfsimplex)=rname
-    
-    cnames = c()
-    for (i in (1:(dim(Y)[2]-1))){
-      cnames = c(cnames, paste("Yilr_",i,sep=""))
-      cnames = c(cnames, paste("(sd_Yilr_",i,")",sep=""))
-    }
-    
-    rname = c()
-    if (constant){rname = c(rname, "intercept")}
-    for (i in 1:length(X)){
-      for (j in 1:(dim(X[[i]])[2]-1)){
-        rname = c(rname, paste("X",i,j,sep="_"))
-          }
-        }
-    
-    if (!is.na(Z[[1]][1,1])){
-      for (i in 1:length(Z)){
-        for (j in 1:(dim(Z[[i]])[2])){
-           rname = c(rname, paste("Z",i,j,sep="_"))
-        }
-      }
-    }
-
-    
-    # B star and sds
-    dfilr = data.frame(Bstar)
-    
-    
-    
-    # sds
-    dimilr = dim(Y)[2]-1
-    nc = dim(dfilr)[1]
-    for (i in dimilr:1){
-      if (i==dimilr){dfilr = cbind(dfilr,matrix(nrow=nc))}
-      else{
-        dfilr = cbind(dfilr[,1:i],matrix(nrow=nc),dfilr[,(i+1):(dim(dfilr)[2])])
-      }
-    }
-    
-    dfilr = t(dfilr)
-    
-    for (i in 1:(dim(bcov)[1])){
-      dfilr[2*i] = sqrt(bcov[i,i]) # standard deviation as sqrt of var
-    }
-    dfilr = t(dfilr)
-    
-    rownames(dfilr) = rname
-    colnames(dfilr) = cnames
-    
-    colnames(dfsimplex) = colnames(Bs)
-    rownames(dfsimplex) = rownames(Bs) 
-    
-    arg1 = "      B (COEFFICIENTS IN THE SIMPLEX):      "
-    arg2 = as.matrix(dfsimplex)
-    arg3 = "--------------------------------------------"
-    arg4 = "     B* (COEF. and SD IN THE ALR SPACE):    "
-    arg5 = as.matrix(dfilr)
-    arg6 = "--------------------------------------------"
-    arg7 = paste("n obs  : ", dim(tx)[1], sep="")
-    arg8 = paste("SSR    : ", sum(resid^2), sep="") # sum of squared residuals
-    cat(arg1,"\n")
-    print(arg2)
-    cat(arg3,"\n", arg4,"\n")
-    print(arg5)
-    cat(arg6,"\n", arg7,"\n", arg8,"\n")
-  }
+  return(reslist) 
 }
 ```
 
@@ -761,8 +657,7 @@ inv_permutation_D = function(mat,P){ # undoes the permutation
 ## ALR yx reg
 
 ```{r}
-alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of reference variables order: (Y, X1, X2, ...) 
-# pres = TRUE to print with a better presentation (name of variables and sd if it is the case) of B and B*.
+alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE){
   
   if (constant){x_col_names = c("intercept")}
   else{x_col_names = c()}
@@ -881,102 +776,7 @@ alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, pres=FALS
   
   reslist = list(Y_coord = ty, X_coord = tx, constant = constant, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
   attr(reslist,"reg_type") = "alr_yx_reg"
-  if (!pres){return(reslist)} # return results if not pres
-  
-  
-  
-  # part of PRES = TRUE
-  
-  if (pres){
-    dfsimplex = data.frame(Bs)
-    name=c()
-    for (i in 1:(dim(Y)[2])){
-      name = c(name, paste("Y_", i, sep=""))
-    }
-    colnames(dfsimplex)=name
-    
-    rname = c()
-    if (constant){rname = c(rname, "intercept")}
-    for (i in 1:length(X)){
-      for (j in 1:(dim(X[[i]])[2])){
-        rname = c(rname, paste("X",i,j,sep="_"))
-      }
-    }
-    
-    if (!is.na(Z[[1]][1,1])){
-      for (i in 1:length(Z)){
-        for (j in 1:(dim(Z[[i]])[2])){
-           rname = c(rname, paste("Z",i,j,sep="_"))
-        }
-      }
-    }
-    
-    rownames(dfsimplex)=rname
-    
-    cnames = c()
-    for (i in (1:(dim(Y)[2]-1))){
-      cnames = c(cnames, paste("Yalr_",i,sep=""))
-      cnames = c(cnames, paste("(sd_Yalr_",i,")",sep=""))
-    }
-    
-    rname = c()
-    if (constant){rname = c(rname, "intercept")}
-    for (i in 1:length(X)){
-      for (j in 1:(dim(X[[i]])[2]-1)){
-        rname = c(rname, paste("X",i,j,sep="_"))
-          }
-        }
-    
-    if (!is.na(Z[[1]][1,1])){
-      for (i in 1:length(Z)){
-        for (j in 1:(dim(Z[[i]])[2])){
-           rname = c(rname, paste("Z",i,j,sep="_"))
-        }
-      }
-    }
-
-    
-    # B star and sds
-    dfalr = data.frame(Bstar)
-    
-    
-    # sds
-    dimalr = dim(Y)[2]-1
-    nc = dim(dfalr)[1]
-    for (i in dimalr:1){
-      if (i==dimalr){dfalr = cbind(dfalr,matrix(nrow=nc))}
-      else{
-        dfalr = cbind(dfalr[,1:i],matrix(nrow=nc),dfalr[,(i+1):(dim(dfalr)[2])])
-      }
-    }
-    
-    dfalr = t(dfalr)
-    
-    for (i in 1:(dim(bcov)[1])){
-      dfalr[2*i] = sqrt(bcov[i,i]) # standard deviation as sqrt of var
-    }
-    dfalr = t(dfalr)
-    
-    rownames(dfalr) = rname
-    colnames(dfalr) = cnames
-    
-    colnames(dfsimplex) = colnames(Bs)
-    rownames(dfsimplex) = rownames(Bs) 
-    
-    arg1 = "      B (COEFFICIENTS IN THE SIMPLEX):      "
-    arg2 = as.matrix(dfsimplex)
-    arg3 = "--------------------------------------------"
-    arg4 = "     B* (COEF. and SD IN THE ALR SPACE):    "
-    arg5 = as.matrix(dfalr)
-    arg6 = "--------------------------------------------"
-    arg7 = paste("n obs  : ", dim(tx)[1], sep="")
-    arg8 = paste("SSR    : ", sum(resid^2), sep="") # sum of squared residuals
-    cat(arg1,"\n")
-    print(arg2)
-    cat(arg3,"\n", arg4,"\n")
-    print(arg5)
-    cat(arg6,"\n", arg7,"\n", arg8,"\n")
-  }
+  return(reslist) 
 }
 ```
 
@@ -1046,9 +846,7 @@ alr_yx_impacts = function(results){ # the unique argument is the named list that
 ## ILR x reg
 
 ```{r}
-ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
-# pres = TRUE toprint with a better presentation (name of variables and sd if it is the case) of B and B*.
-
+ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE){
   if (constant){x_col_names = c("intercept")}
   else{x_col_names = c()}
   
@@ -1124,7 +922,9 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, pres=F
     }
     if (h==(h+dimx-2)){matrix_x = t(matrix(Bstar[h,]))}
     if (h!=(h+dimx-2)){matrix_x = Bstar[h:(h+dimx-2),] }
+    
     B_q = as.matrix(t(matrix_x)%*%t(V[[i]]))
+    
     Bs= as.matrix(rbind(Bs, t(B_q)))
     h=h+dimx-1
   }
@@ -1159,112 +959,14 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE, pres=F
   
   reslist = list(Y_coord = ty, X_coord = tx, constant = constant, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
   attr(reslist, "reg_type") = "ilr_x_reg"
-  
-  if (!pres){return(reslist)} # return results if not pres
-  
-  
-  # part of PRES = TRUE
-  
-  if (pres){
-    dfsimplex = data.frame(Bs)
-    name=c()
-    for (i in 1:(dim(Y)[2])){
-      name = c(name, paste("Y_", i, sep=""))
-    }
-    colnames(dfsimplex)=name
-    
-    rname = c()
-    if (constant){rname = c(rname, "intercept")}
-    for (i in 1:length(X)){
-      for (j in 1:(dim(X[[i]])[2])){
-        rname = c(rname, paste("X",i,j,sep="_"))
-      }
-    }
-    
-    if (!is.na(Z[[1]][1,1])){
-      for (i in 1:length(Z)){
-        for (j in 1:(dim(Z[[i]])[2])){
-           rname = c(rname, paste("Z",i,j,sep="_"))
-        }
-      }
-    }
-    
-    rownames(dfsimplex)=rname
-    
-    cnames = c()
-    for (i in (1:(dim(Y)[2]))){
-      cnames = c(cnames, paste("Yilr_",i,sep=""))
-      cnames = c(cnames, paste("(sd_Yilr_",i,")",sep=""))
-    }
-    
-    
-    rname = c()
-    if (constant){rname = c(rname, "intercept")}
-    for (i in 1:length(X)){
-      for (j in 1:(dim(X[[i]])[2]-1)){
-        rname = c(rname, paste("X",i,j,sep="_"))
-          }
-        }
-    
-    if (!is.na(Z[[1]][1,1])){
-      for (i in 1:length(Z)){
-        for (j in 1:(dim(Z[[i]])[2])){
-           rname = c(rname, paste("Z",i,j,sep="_"))
-        }
-      }
-    }
-
-    
-    # B star and sds
-    dfilr = data.frame(Bstar)
-    
-    
-    
-    # sds
-    dimilr = dim(Y)[2]
-    nc = dim(dfilr)[1]
-    for (i in dimilr:1){
-      if (i==dimilr){dfilr = cbind(dfilr,matrix(nrow=nc))}
-      else{
-        dfilr = cbind(dfilr[,1:i],matrix(nrow=nc),dfilr[,(i+1):(dim(dfilr)[2])])
-      }
-    }
-    
-    dfilr = t(dfilr)
-    
-    for (i in 1:(dim(bcov)[1])){
-      dfilr[2*i] = sqrt(bcov[i,i]) # standard deviation as sqrt of var
-    }
-    dfilr = t(dfilr)
-    
-    rownames(dfilr) = rname
-    colnames(dfilr) = cnames
-    
-    colnames(dfsimplex) = colnames(Bs)
-    rownames(dfsimplex) = rownames(Bs) 
-    
-    arg1 = "      B (COEFFICIENTS IN THE SIMPLEX):      "
-    arg2 = as.matrix(dfsimplex)
-    arg3 = "--------------------------------------------"
-    arg4 = "     B* (COEF. and SD IN THE ILR SPACE):    "
-    arg5 = as.matrix(dfilr)
-    arg6 = "--------------------------------------------"
-    arg7 = paste("n obs  : ", dim(tx)[1], sep="")
-    arg8 = paste("SSR    : ", sum(resid^2), sep="") # sum of squared residuals
-    cat(arg1,"\n")
-    print(arg2)
-    cat(arg3,"\n", arg4,"\n")
-    print(arg5)
-    cat(arg6,"\n", arg7,"\n", arg8,"\n")
-  }
+  return(reslist)
 }
 ```
 
 ## ALR x reg
 
 ```{r}
-alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, pres=FALSE){ # Y dependent, X indep compositional, Z indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
-# pres = TRUE to print with a better presentation (name of variables and sd if it is the case) of B and B*.
+alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE){
   
   if (constant){x_col_names = c("intercept")}
   else{x_col_names = c()}
@@ -1339,7 +1041,7 @@ alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, pres=FALSE
   }
   xdimlist=list()
   for (i in 1:length(X)){
-    if (is.null(attr(X[[i]],"space"))){dimx = dim(X[[i]])[2]} #number of parts of this variable i of X D parts --> D-1 param in the ilr 
+    if (is.null(attr(X[[i]],"space"))){dimx = dim(X[[i]])[2]} #number of parts of this variable i of X D parts --> D-1 param in the alr 
     if (!is.null(attr(X[[i]],"space"))){
       if (attr(X[[i]],"space")=="simplex"){
         dimx = dim(X[[i]])[2]
@@ -1385,102 +1087,7 @@ alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE, pres=FALSE
   
   reslist = list(Y_coord = ty, constant = constant, X_coord = tx, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues, xdim=xdimlist)
   attr(reslist,"reg_type") = "alr_x_reg"
-  if (!pres){return(reslist)} # return results if not pres
-
-  
-  # part of PRES = TRUE
-  
-  if (pres){
-    dfsimplex = data.frame(Bs)
-    name=c()
-    for (i in 1:(dim(Y)[2])){
-      name = c(name, paste("Y_", i, sep=""))
-    }
-    colnames(dfsimplex)=name
-    
-    rname = c()
-    if (constant){rname = c(rname, "intercept")}
-    for (i in 1:length(X)){
-      for (j in 1:(dim(X[[i]])[2])){
-        rname = c(rname, paste("X",i,j,sep="_"))
-      }
-    }
-    
-    if (!is.na(Z[[1]][1,1])){
-      for (i in 1:length(Z)){
-        for (j in 1:(dim(Z[[i]])[2])){
-           rname = c(rname, paste("Z",i,j,sep="_"))
-        }
-      }
-    }
-    
-    rownames(dfsimplex)=rname
-    
-    cnames = c()
-    for (i in (1:(dim(Y)[2]))){
-      cnames = c(cnames, paste("Yalr_",i,sep=""))
-      cnames = c(cnames, paste("(sd_Yalr_",i,")",sep=""))
-    }
-    
-    rname = c()
-    if (constant){rname = c(rname, "intercept")}
-    for (i in 1:length(X)){
-      for (j in 1:(dim(X[[i]])[2]-1)){
-        rname = c(rname, paste("X",i,j,sep="_"))
-          }
-        }
-    
-    if (!is.na(Z[[1]][1,1])){
-      for (i in 1:length(Z)){
-        for (j in 1:(dim(Z[[i]])[2])){
-           rname = c(rname, paste("Z",i,j,sep="_"))
-        }
-      }
-    }
-
-    
-    # B star and sds
-    dfalr = data.frame(Bstar)
-    
-    
-    
-    # sds
-    dimalr = dim(Y)[2]
-    nc = dim(dfalr)[1]
-    for (i in dimalr:1){
-      if (i==dimalr){dfalr = cbind(dfalr,matrix(nrow=nc))}
-      else{
-        dfalr = cbind(dfalr[,1:i],matrix(nrow=nc),dfalr[,(i+1):(dim(dfalr)[2])])
-      }
-    }
-    
-    dfalr = t(dfalr)
-    
-    for (i in 1:(dim(bcov)[1])){
-      dfalr[2*i] = sqrt(bcov[i,i]) # standard deviation as sqrt of var
-    }
-    dfalr = t(dfalr)
-    
-    rownames(dfalr) = rname
-    colnames(dfalr) = cnames
-    
-    colnames(dfsimplex) = colnames(Bs)
-    rownames(dfsimplex) = rownames(Bs) 
-    
-    arg1 = "      B (COEFFICIENTS IN THE SIMPLEX):      "
-    arg2 = as.matrix(dfsimplex)
-    arg3 = "--------------------------------------------"
-    arg4 = "     B* (COEF. and SD IN THE ALR SPACE):    "
-    arg5 = as.matrix(dfalr)
-    arg6 = "--------------------------------------------"
-    arg7 = paste("n obs  : ", dim(tx)[1], sep="")
-    arg8 = paste("SSR    : ", sum(resid^2), sep="") # sum of squared residuals
-    cat(arg1,"\n")
-    print(arg2)
-    cat(arg3,"\n", arg4,"\n")
-    print(arg5)
-    cat(arg6,"\n", arg7,"\n", arg8,"\n")
-  }
+  return(reslist) 
 }
 ```
 
@@ -1502,14 +1109,14 @@ check_formula = function(dataset, formula){ # returns a list of X, a list of Y, 
     }
   } 
   
-  compositional_x = FALSE
   xtext = as.character(formula)[3]
   splitted = strsplit(xtext, "\\+|\\-")[[1]]
   numx=1
   numz=1
   X = list() #compo vars
   Z = list() #standard vars
-  neg = sum(Y<=0)
+  neg = 0 
+  if (compositional_y){neg = sum(Y<=0)}
   nonumeric = sum(!(is.numeric(Y)))
   nonumeric = nonumeric + sum((is.nan(Y)))
   nonumeric = nonumeric + sum((is.na(Y)))
@@ -1574,7 +1181,7 @@ check_formula = function(dataset, formula){ # returns a list of X, a list of Y, 
 ## general regression function
 
 ```{r}
-reg = function(dataset, formula, transformation = "ILR", pres=FALSE, V=list(matrix()), R=list(NULL)){
+inner_reg = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=list(NULL)){
   input = check_formula(dataset, formula)
   Y = input$Y
   X = input$X
@@ -1583,42 +1190,24 @@ reg = function(dataset, formula, transformation = "ILR", pres=FALSE, V=list(matr
   model_type = input$model_type
   if (transformation == "ILR"){
     if (model_type == "yx_reg"){
-      if (pres){
-      cat("YX-compositional model. ILR transformation. \n", "========================================== \n")
-      }
-      return(ilr_yx_reg(Y=Y,X=X,Z=Z,V=V,constant = constant, pres = pres))
+      return(ilr_yx_reg(Y=Y,X=X,Z=Z,V=V,constant = constant))
     }
     if (model_type == "x_reg"){
-      if (pres){
-      cat("X-compositional model. ILR transformation. \n", "========================================== \n")
-      }
-      return(ilr_x_reg(Y=Y,X=X,Z=Z,V=V,constant=constant,pres=pres))
+      return(ilr_x_reg(Y=Y,X=X,Z=Z,V=V,constant=constant))
     }
     if (model_type == "y_reg"){
-      if (pres){
-      cat("Y-compositional model. ILR transformation. \n", "========================================== \n")
-      }
-      return(ilr_y_reg(Y=Y,X=X,V=V,constant=constant,pres=pres))
+      return(ilr_y_reg(Y=Y,X=X,V=V,constant=constant))
     }
   }
   if (transformation == "ALR"){
     if (model_type == "yx_reg"){
-      if (pres){
-      cat("YX-compositional model. ALR transformation. \n", "========================================== \n")
-      }
-      return(alr_yx_reg(Y=Y,X=X,Z=Z,R=R,constant=constant,pres=pres))
+      return(alr_yx_reg(Y=Y,X=X,Z=Z,R=R,constant=constant))
     }
     if (model_type == "x_reg"){
-      if (pres){
-      cat("X-compositional model. ALR transformation. \n", "========================================== \n")
-      }
-      return(alr_x_reg(Y=Y,X=X,Z=Z,R=R,constant=constant,pres=pres))
+      return(alr_x_reg(Y=Y,X=X,Z=Z,R=R,constant=constant))
     }
     if (model_type == "y_reg"){
-      if (pres){
-      cat("Y-compositional model. ALR transformation. \n", "========================================== \n")
-      }
-      return(alr_y_reg(Y=Y,X=X,R=R,constant=constant,pres=pres))
+      return(alr_y_reg(Y=Y,X=X,R=R,constant=constant))
     }
   }
 }
@@ -1721,9 +1310,7 @@ alr_x_impacts = function(results){ # the unique argument is the named list that 
 ## ilr_y_reg
 
 ```{r}
-ilr_y_reg = function(Y,X,V=list(matrix()),constant=TRUE, pres=FALSE){ # Y dependent, X indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
-# pres = TRUE to print with a better presentation (name of variables and sd if it is the case) of B and B*.
-  
+ilr_y_reg = function(Y,X,V=list(matrix()),constant=TRUE){
   if (constant){x_col_names = c("intercept")}
   else{x_col_names = c()}
   
@@ -1805,86 +1392,7 @@ ilr_y_reg = function(Y,X,V=list(matrix()),constant=TRUE, pres=FALSE){ # Y depend
   list_return = list(Y_coord = ty, X_coord = tx, constant = constant, B_coord = Bstar, B_simplex = Bs, Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
   attr(list_return, "reg_type") = "ilr_y_reg"
   
-  if (!pres){return(list_return)} 
-# return results if not pres + Bcoord_cov=bcov
-  
-  # part of PRES = TRUE
-  
-  if (pres=="TRUE"){
-    dfsimplex = data.frame(Bs)
-    name=c()
-    for (i in 1:(dim(Y)[2])){
-      name = c(name, paste("Y_", i, sep=""))
-    }
-    colnames(dfsimplex)=name
-    
-    rname = c()
-    if (constant){rname = c(rname, "intercept")}
-    for (i in 1:length(X)){
-      for (j in 1:(dim(X[[i]])[2])){
-        rname = c(rname, paste("X",i,j,sep="_"))
-      }
-    }
-    
-    rownames(dfsimplex)=rname
-    
-    cnames = c()
-    for (i in (1:(dim(Y)[2]-1))){
-      cnames = c(cnames, paste("Yilr_",i,sep=""))
-      cnames = c(cnames, paste("(sd_Yilr_",i,")",sep=""))
-    }
-    
-    rname = c()
-    if (constant){rname = c(rname, "intercept")}
-    for (i in 1:length(X)){
-      for (j in 1:(dim(X[[i]])[2])){
-        rname = c(rname, paste("X",i,j,sep="_"))
-          }
-        }
-
-    
-    # B star and sds
-    dfilr = data.frame(Bstar)
-    
-    
-    # sds
-    dimilr = dim(Y)[2]-1
-    nc = dim(dfilr)[1]
-    for (i in dimilr:1){
-      if (i==dimilr){dfilr = cbind(dfilr,matrix(nrow=nc))}
-      else{
-        dfilr = cbind(dfilr[,1:i],matrix(nrow=nc),dfilr[,(i+1):(dim(dfilr)[2])])
-      }
-    }
-    
-    dfilr = t(dfilr)
-    
-    for (i in 1:(dim(bcov)[1])){
-      dfilr[2*i] = sqrt(bcov[i,i]) # standard deviation as sqrt of var
-    }
-    dfilr = t(dfilr)
-    
-    rownames(dfilr) = rname
-    colnames(dfilr) = cnames
-    
-    
-    colnames(dfsimplex) = colnames(Bs)
-    rownames(dfsimplex) = rownames(Bs) 
-    
-    arg1 = "      B (COEFFICIENTS IN THE SIMPLEX):      "
-    arg2 = as.matrix(dfsimplex)
-    arg3 = "--------------------------------------------"
-    arg4 = "     B* (COEF. and SD IN THE ALR SPACE):    "
-    arg5 = as.matrix(dfilr)
-    arg6 = "--------------------------------------------"
-    arg7 = paste("n obs  : ", dim(tx)[1], sep="")
-    arg8 = paste("SSR    : ", sum(resid^2), sep="") # sum of squared residuals
-    cat(arg1,"\n")
-    print(arg2)
-    cat(arg3,"\n", arg4,"\n")
-    print(arg5)
-    cat(arg6,"\n", arg7,"\n", arg8,"\n")
-  }
+  return(list_return)
 }
 ```
 
@@ -1892,10 +1400,7 @@ ilr_y_reg = function(Y,X,V=list(matrix()),constant=TRUE, pres=FALSE){ # Y depend
 ## alr_y_reg
 
 ```{r}
-alr_y_reg = function(Y,X,R=list(NULL),constant=TRUE, pres=FALSE){ # Y dependent, X indep. not compositional, c if constant is included, V list of contrast matrices. order: (Y, X1, X2, ...) 
-# pres = TRUE to print with a better presentation (name of variables and sd if it is the case) of B and B*.
-
-  
+alr_y_reg = function(Y,X,R=list(NULL),constant=TRUE){ 
   if (constant){x_col_names = c("intercept")}
   else{x_col_names = c()}
   
@@ -1920,7 +1425,7 @@ alr_y_reg = function(Y,X,R=list(NULL),constant=TRUE, pres=FALSE){ # Y dependent,
   for (i in 1:length(X)){
     tx = cbind(tx,X[[i]])
     }
-  if (constant==FALSE){ # should remove the vector of ones if no constant is required
+  if (constant==FALSE){ 
     tx=tx[,-1]
   }
   
@@ -1977,87 +1482,7 @@ alr_y_reg = function(Y,X,R=list(NULL),constant=TRUE, pres=FALSE){ # Y dependent,
   attr(list_return, "reg_type") = "alr_y_reg"
   
   
-  if (!pres){return(list_return)} 
-# return results if not pres + Bcoord_cov=bcov
-  
-  
-# part of PRES = TRUE
-  
-if (pres=="TRUE"){
-    dfsimplex = data.frame(Bs)
-    name=c()
-    for (i in 1:(dim(Y)[2])){
-      name = c(name, paste("Y_", i, sep=""))
-    }
-    colnames(dfsimplex)=name
-    
-    rname = c()
-    if (constant){rname = c(rname, "intercept")}
-    for (i in 1:length(X)){
-      for (j in 1:(dim(X[[i]])[2])){
-        rname = c(rname, paste("X",i,j,sep="_"))
-      }
-    }
-    
-    rownames(dfsimplex)=rname
-    
-    cnames = c()
-    for (i in (1:(dim(Y)[2]-1))){
-      cnames = c(cnames, paste("Yilr_",i,sep=""))
-      cnames = c(cnames, paste("(sd_Yilr_",i,")",sep=""))
-    }
-    
-    rname = c()
-    if (constant){rname = c(rname, "intercept")}
-    for (i in 1:length(X)){
-      for (j in 1:(dim(X[[i]])[2])){
-        rname = c(rname, paste("X",i,j,sep="_"))
-          }
-        }
-
-    
-    # B star and sds
-    dfalr = data.frame(Bstar)
-    
-    
-    # sds
-    dimilr = dim(Y)[2]-1
-    nc = dim(dfalr)[1]
-    for (i in dimilr:1){
-      if (i==dimilr){dfalr = cbind(dfalr,matrix(nrow=nc))}
-      else{
-        dfalr = cbind(dfalr[,1:i],matrix(nrow=nc),dfalr[,(i+1):(dim(dfalr)[2])])
-      }
-    }
-    
-    dfalr = t(dfalr)
-    
-    for (i in 1:(dim(bcov)[1])){
-      dfalr[2*i] = sqrt(bcov[i,i]) # standard deviation as sqrt of var
-    }
-    dfalr = t(dfalr)
-    
-    rownames(dfalr) = rname
-    colnames(dfalr) = cnames
-    
-    
-    colnames(dfsimplex) = colnames(Bs)
-    rownames(dfsimplex) = rownames(Bs) 
-    
-    arg1 = "      B (COEFFICIENTS IN THE SIMPLEX):      "
-    arg2 = as.matrix(dfsimplex)
-    arg3 = "--------------------------------------------"
-    arg4 = "     B* (COEF. and SD IN THE ALR SPACE):    "
-    arg5 = as.matrix(dfalr)
-    arg6 = "--------------------------------------------"
-    arg7 = paste("n obs  : ", dim(tx)[1], sep="")
-    arg8 = paste("SSR    : ", sum(resid^2), sep="") # sum of squared residuals
-    cat(arg1,"\n")
-    print(arg2)
-    cat(arg3,"\n", arg4,"\n")
-    print(arg5)
-    cat(arg6,"\n", arg7,"\n", arg8,"\n")
-  }
+  return(list_return)
 }
 ```
 
@@ -2067,8 +1492,7 @@ if (pres=="TRUE"){
 ## ILR y impacts
 
 ```{r}
-ilr_y_impacts = function(results){ #results argument regers to the output of ilr_y_reg
-  # first we need EY*
+ilr_y_impacts = function(results){ 
   ccnames = colnames(results$B_simplex)
   rcnames = rownames(results$B_simplex)
   constant = results$constant
@@ -2103,7 +1527,7 @@ ilr_y_impacts = function(results){ #results argument regers to the output of ilr
 ## ALR y impacts 
 
 ```{r}
-alr_y_impacts = function(results){ #results argument regers to the output of ilr_y_reg
+alr_y_impacts = function(results){ 
   constant = results$constant
   Bcoord = results$B_coord
   coln = colnames(results$B_simplex)
@@ -2165,7 +1589,7 @@ imp_summary = function(impact_results){
   cc=1
   for (i in xnames){
     for (j in ynames){
-      xaxis[cc] = paste(i,j,sep=" -> ") #to?
+      xaxis[cc] = paste(i,j,sep=" -> ") 
       cc=cc+1
     }
   }
@@ -2233,7 +1657,7 @@ p_values_coef = function(dataset, formula, transformation = "ILR", V=list(matrix
     ids <- sample(x=nrow(dataset), size=dim(dataset)[1], replace=T)
     sample_b <- dataset[ids,]
     rownames(sample_b) = NULL
-    coefs_b = reg(dataset = sample_b, formula = formula, transformation = transformation, V=V, R=R, pres=F)$B_simplex
+    coefs_b = inner_reg(dataset = sample_b, formula = formula, transformation = transformation, V=V, R=R)$B_simplex
     results[[b]] = coefs_b
   }
   pvals = results[[1]]
@@ -2249,7 +1673,6 @@ p_values_coef = function(dataset, formula, transformation = "ILR", V=list(matrix
       pvals[i,j] = 2*min(lowers,1-lowers)
     }
   }
-  cat("P-values for coefficients (H0: coef = 1/#parts):\n\n")
   return(pvals)
 }
 ```
@@ -2258,9 +1681,11 @@ p_values_coef = function(dataset, formula, transformation = "ILR", V=list(matrix
 Version of 'reg' including significance stars: (this should be included in the pres part of each reg, not as a separated function). This is only an example of how it should be done.
 
 ```{r}
-reg2 = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=list(NULL), B=1000, seed=31000){
-  reg_res = reg(dataset = dataset, formula = formula, transformation = transformation, V=V, R=R, pres=F)
+reg = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=list(NULL), pres=FALSE, simplex_pvalues="bootstrap", B=1000, seed=31000){
+  reg_res = inner_reg(dataset = dataset, formula = formula, transformation = transformation, V=V, R=R)
+  if (!pres){return(reg_res)}
   input = check_formula(dataset, formula)
+  model_type = input$model_type
   Bs = reg_res$B_simplex
   Bstar = reg_res$B_coord
   bcov = reg_res$Bcoord_cov
@@ -2271,8 +1696,6 @@ reg2 = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=li
   X = input$X
   Z = input$Z
   constant=input$constant
-  
-  pvalues = p_values_coef(dataset,formula,transformation,V,R,B,seed)
   
   dfsimplex = data.frame(Bs)
   name=c()
@@ -2299,24 +1722,46 @@ reg2 = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=li
   
   rownames(dfsimplex)=rname
   
+  if (model_type=="y_reg"){pp=1}
+  if (model_type=="yx_reg"){pp=1}
+  if (model_type=="x_reg"){pp=0}
+  
   cnames = c()
-  for (i in (1:(dim(Y)[2]-1))){
-    cnames = c(cnames, paste("Yilr_",i,sep=""))
-    cnames = c(cnames, paste("(sd_Yilr_",i,")",sep=""))
+  for (i in (1:(dim(Y)[2]-pp))){
+    if (transformation=="ILR"){
+      cnames = c(cnames, paste("Yilr_",i,sep=""))
+      cnames = c(cnames, paste("(sd_Yilr_",i,")",sep=""))}
+    if (transformation=="ALR"){
+      cnames = c(cnames, paste("Yalr_",i,sep=""))
+      cnames = c(cnames, paste("(sd_Yalr_",i,")",sep=""))}
   }
+  
+  if (model_type=="y_reg"){qq=0}
+  if (model_type=="yx_reg"){qq=1}
+  if (model_type=="x_reg"){qq=1}
   
   rname = c()
   if (constant){rname = c(rname, "intercept")}
   for (i in 1:length(X)){
-    for (j in 1:(dim(X[[i]])[2]-1)){
-      rname = c(rname, paste("X",i,j,sep="_"))
+    for (j in 1:(dim(X[[i]])[2]-qq)){
+      if (transformation=="ILR"){
+        rname = c(rname, paste("Xilr",i,j,sep="_"))}
+      if (transformation=="ALR"){
+        rname = c(rname, paste("Xalr",i,j,sep="_"))}
         }
       }
   
   if (!is.na(Z[[1]][1,1])){
+    ccc=1
     for (i in 1:length(Z)){
       for (j in 1:(dim(Z[[i]])[2])){
-         rname = c(rname, paste("Z",i,j,sep="_"))
+        if (transformation=="ALR"){
+          rname = c(rname, paste("Z",ccc,sep="_"))
+        }
+        if (transformation=="ILR"){
+          rname = c(rname, paste("Z",ccc,sep="_"))
+        }
+        ccc=ccc+1
       }
     }
   }
@@ -2325,10 +1770,8 @@ reg2 = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=li
   # B star and sds
   dfilr = data.frame(Bstar)
   
-  
-  
   # sds
-  dimilr = dim(Y)[2]-1
+  dimilr = dim(Y)[2]-pp
   nc = dim(dfilr)[1]
   for (i in dimilr:1){
     if (i==dimilr){dfilr = cbind(dfilr,matrix(nrow=nc))}
@@ -2347,53 +1790,97 @@ reg2 = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=li
   rownames(dfilr) = rname
   colnames(dfilr) = cnames
   
-  sigmat = dfsimplex # copy matrix
-  
-  for (i in 1:(dim(dfsimplex)[1])){
-    for (j in 1:(dim(dfsimplex)[2])){
-      val = dfsimplex[i,j]
-      pval = pvalues[i,j]
+  ilr_pvals = matrix(0,dim(dfilr)[1],dim(dfilr)[2]/2)
+  cc=0
+  for (j in seq(1,dim(dfilr)[2],2)){
+    cc=cc+1
+    t_j = dfilr[,j]/dfilr[,j+1]
+    for (i in 1:(dim(dfilr)[1])){
+      pval = pnorm(-abs(t_j[[i]]),mean=0,sd=1)+(1-pnorm(abs(t_j[[i]]),mean=0,sd=1))
       if ((pval>0.05)&(pval<0.10)){
-        sigmat[i,j] = "*  "
+        ilr_pvals[i,cc]  = "*  "
       }
       if ((pval<0.05)&(pval>0.01)){
-        sigmat[i,j] = "** "
+        ilr_pvals[i,cc]  = "** "
       }
       if (pval<0.01){
-        sigmat[i,j] = "***"
+        ilr_pvals[i,cc]  = "***"
       }
       else{
-        sigmat[i,j] = "   "
+        ilr_pvals[i,cc]  = "   "
       }
     }
   }
   
+  for (i in dim(ilr_pvals)[2]:1){
+    orignames = colnames(dfilr)
+    nnames_i = "   "
+    if (i==dim(ilr_pvals)[2]){
+      newnames  = c(orignames[1:(2*i)],nnames_i)
+      newmat    = cbind(dfilr[,1:(2*i)],ilr_pvals[,i])
+    }
+    else{
+      newnames  = c(orignames[1:(2*i)],nnames_i,orignames[(2*i+1):length(orignames)])
+      newmat    = cbind(dfilr[,1:(2*i)],ilr_pvals[,i],dfilr[,(2*i+1):(dim(dfilr)[2])])
+    }
+    dfilr = newmat
+    orignames = newnames
+    colnames(dfilr) = orignames
+  }
+    if (simplex_pvalues=="bootstrap"){
+      sigmat = dfsimplex
+      if (model_type=="y_reg"){pvals = p_values_coef(dataset = dataset,formula = formula,transformation = transformation,V=V,R=R,B=B,seed=seed)}
+      if (model_type=="yx_reg"){pvals = p_values_coef(dataset = dataset,formula = formula,transformation = transformation,V=V,R=R,B=B,seed=seed)}
+      if (model_type=="x_reg"){pvals = p_values_coef_x(dataset = dataset,formula = formula,transformation = transformation,V=V,R=R,B=B,seed=seed)}
+      for (i in 1:(dim(dfsimplex)[1])){
+        for (j in 1:(dim(dfsimplex)[2])){
+          val = dfsimplex[i,j]
+          pval = pvals[i,j]
+          if ((pval>0.05)&(pval<0.10)){
+            sigmat[i,j] = "*  "
+          }
+          if ((pval<0.05)&(pval>0.01)){
+            sigmat[i,j] = "** "
+          }
+          if (pval<0.01){
+            sigmat[i,j] = "***"
+          }
+          else{
+            sigmat[i,j] = "   "
+          }
+        }
+      }
+    }
+    
   colnames(dfsimplex) = colnames(Bs)
   rownames(dfsimplex) = rownames(Bs)
   
-  
-  
-  for (i in dim(sigmat)[2]:1){
-    orignames = colnames(dfsimplex)
-    #nnames_i  = paste("(sig. ",orignames[[i]],")",sep="")
-    nnames_i = "   "
-    if (i==dim(sigmat)[2]){
-      newnames  = c(orignames[1:i],nnames_i)
-      newmat    = cbind(dfsimplex[,1:i],sigmat[,i])
+  if (simplex_pvalues=="bootstrap"){
+    for (i in dim(sigmat)[2]:1){
+      orignames = colnames(dfsimplex)
+      nnames_i = "   "
+      if (i==dim(sigmat)[2]){
+        newnames  = c(orignames[1:i],nnames_i)
+        newmat    = cbind(dfsimplex[,1:i],sigmat[,i])
+      }
+      else{
+        newnames  = c(orignames[1:i],nnames_i,orignames[(i+1):length(orignames)])
+        newmat    = cbind(dfsimplex[,1:i],sigmat[,i],dfsimplex[,(i+1):(dim(dfsimplex)[2])])
+      }
+      dfsimplex = newmat
+      orignames = newnames
+      colnames(dfsimplex) = orignames
     }
-    else{
-      newnames  = c(orignames[1:i],nnames_i,orignames[(i+1):length(orignames)])
-      newmat    = cbind(dfsimplex[,1:i],sigmat[,i],dfsimplex[,(i+1):(dim(dfsimplex)[2])])
-    }
-    dfsimplex = newmat
-    orignames = newnames
-    colnames(dfsimplex) = orignames
   }
-  
+  if (transformation=="ILR"){
+    arg4 = "     B* (COEF. and SD IN THE ILR SPACE):    "
+  }
+  if (transformation=="ALR"){
+    arg4 = "     B* (COEF. and SD IN THE ALR SPACE):    "
+  }
   arg1 = "      B (COEFFICIENTS IN THE SIMPLEX):      "
   arg2 = as.matrix(dfsimplex)
   arg3 = "--------------------------------------------"
-  arg4 = "     B* (COEF. and SD IN THE ALR SPACE):    "
   arg5 = as.matrix(dfilr)
   arg6 = "--------------------------------------------"
   arg7 = paste("n obs  : ", dim(tx)[1], sep="")
@@ -2401,7 +1888,7 @@ reg2 = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=li
   cat(arg1,"\n")
   print(arg2,quote=FALSE)
   cat(arg3,"\n", arg4,"\n")
-  noquote(arg5)
+  print(arg5,quote=FALSE)
   cat(arg6,"\n", arg7,"\n", arg8,"\n")
 }
 ```
@@ -2426,7 +1913,7 @@ p_values_se = function(dataset, formula, observation, transformation = "ILR", V=
     ids = c(observation,ids)
     sample_b <- dataset[ids,]
     rownames(sample_b) = NULL
-    impacts_i = impacts(reg(dataset = sample_b, formula = formula, transformation = transformation, V=V, R=R, pres=F))[[1]]
+    impacts_i = impacts(inner_reg(dataset = sample_b, formula = formula, transformation = transformation, V=V, R=R))[[1]]
     results[[b]] = impacts_i
   }
   rimpacts = results[[1]]
@@ -2440,7 +1927,6 @@ p_values_se = function(dataset, formula, observation, transformation = "ILR", V=
       rimpacts[i,j] = 2*min(lowers,1-lowers)
     }
   }
-  cat("P-values for (semi-)elasticities (H0: s.e. = 0): \n\n")
   return(rimpacts)
 }
 ```
@@ -2456,7 +1942,7 @@ p_values_coef = function(dataset, formula, transformation = "ILR", V=list(matrix
     ids <- sample(x=nrow(dataset), size=dim(dataset)[1], replace=T)
     sample_b <- dataset[ids,]
     rownames(sample_b) = NULL
-    coefs_b = reg(dataset = sample_b, formula = formula, transformation = transformation, V=V, R=R, pres=F)$B_simplex
+    coefs_b = inner_reg(dataset = sample_b, formula = formula, transformation = transformation, V=V, R=R)$B_simplex
     results[[b]] = coefs_b
   }
   pvals = results[[1]]
@@ -2472,28 +1958,21 @@ p_values_coef = function(dataset, formula, transformation = "ILR", V=list(matrix
       pvals[i,j] = 2*min(lowers,1-lowers)
     }
   }
-  cat("P-values for coefficients (H0: coef = 1/#parts):\n\n")
   return(pvals)
 }
 ```
 
-This should be pooled into one pvalues function that checks the model,
-also ratio_share/imp_summary should raise an error if it is not a Y-compo model (or YX maybe?)
-
-(etc)
-
 Delete comments
 
-
 ```{r}
-pvalues_x = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=list(NULL), B=1000, seed=31000){
+p_values_coef_x = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=list(NULL), B=1000, seed=31000){
   results = list()
   set.seed(seed)
   for (b in 1:B){
     ids <- sample(x=nrow(dataset), size=dim(dataset)[1], replace=T)
     sample_b <- dataset[ids,]
     rownames(sample_b) = NULL
-    coefs_b = reg(dataset = sample_b, formula = formula, transformation = transformation, V=V, R=R, pres=F)$B_simplex
+    coefs_b = inner_reg(dataset = sample_b, formula = formula, transformation = transformation, V=V, R=R)$B_simplex
     results[[b]] = coefs_b
   }
   pvals = results[[1]]
@@ -2508,9 +1987,7 @@ pvalues_x = function(dataset, formula, transformation = "ILR", V=list(matrix()),
       pvals[i,j] = 2*min(lowers,1-lowers)
     }
   }
-  cat("P-values for coefficients (H0: coef = 1/#parts):\n\n")
   return(pvals)
-  
 }
 ```
 
