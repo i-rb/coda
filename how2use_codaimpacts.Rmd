@@ -1723,7 +1723,7 @@ p_values_coef = function(dataset, formula, transformation = "ILR", V=list(matrix
 Version of 'reg' including significance stars: (this should be included in the pres part of each reg, not as a separated function). This is only an example of how it should be done.
 
 ```{r}
-reg = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=list(NULL), pres=FALSE, simplex_pvalues="bootstrap", B=1000, seed=31000){
+reg = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=list(NULL), pres=FALSE, simplex_pvalues=FALSE, B=1000, seed=31000){
   reg_res = inner_reg(dataset = dataset, formula = formula, transformation = transformation, V=V, R=R)
   if (!pres){return(reg_res)}
   input = check_formula(dataset, formula)
@@ -1839,17 +1839,20 @@ reg = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=lis
     t_j = dfilr[,j]/dfilr[,j+1]
     for (i in 1:(dim(dfilr)[1])){
       pval = pnorm(-abs(t_j[[i]]),mean=0,sd=1)+(1-pnorm(abs(t_j[[i]]),mean=0,sd=1))
-      if ((pval>0.05)&(pval<0.10)){
-        ilr_pvals[i,cc]  = "*  "
-      }
-      if ((pval<0.05)&(pval>0.01)){
-        ilr_pvals[i,cc]  = "** "
-      }
-      if (pval<0.01){
-        ilr_pvals[i,cc]  = "***"
-      }
+      if (is.na(pval)){ilr_pvals[i,cc]  = " - "}
       else{
-        ilr_pvals[i,cc]  = "   "
+        if ((pval>0.05)&(pval<0.10)){
+          ilr_pvals[i,cc]  = "*  "
+        }
+        if ((pval<0.05)&(pval>0.01)){
+          ilr_pvals[i,cc]  = "** "
+        }
+        if (pval<0.01){
+          ilr_pvals[i,cc]  = "***"
+        }
+        else{
+          ilr_pvals[i,cc]  = "   "
+        }
       }
     }
   }
@@ -1878,17 +1881,20 @@ reg = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=lis
         for (j in 1:(dim(dfsimplex)[2])){
           val = dfsimplex[i,j]
           pval = pvals[i,j]
-          if ((pval>0.05)&(pval<0.10)){
-            sigmat[i,j] = "*  "
-          }
-          if ((pval<=0.05)&(pval>0.01)){
-            sigmat[i,j] = "** "
-          }
-          if (pval<=0.01){
-            sigmat[i,j] = "***"
-          }
+          if (is.na(pval)){sigmat[i,cc]  = " - "}
           else{
-            sigmat[i,j] = "   "
+            if ((pval>0.05)&(pval<0.10)){
+              sigmat[i,j] = "*  "
+            }
+            if ((pval<=0.05)&(pval>0.01)){
+              sigmat[i,j] = "** "
+            }
+            if (pval<=0.01){
+              sigmat[i,j] = "***"
+            }
+            else{
+              sigmat[i,j] = "   "
+            }
           }
         }
       }
