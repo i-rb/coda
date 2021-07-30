@@ -30,10 +30,6 @@ m4 = example_matrices()[[4]]
 m5 = example_matrices()[[5]]
 ```
 
-```{r}
-alr_x_reg(m5,list(m1,m2),list(m3))$B_simplex
-```
-
 
 ```{r}
 load("/Users/ivanrendobarreiro/coda/packageone/data/BDDSegX.RData")
@@ -51,7 +47,7 @@ rm(list = ls())
 ## Closure
 
 ```{r}
-closure=function(x, k){ # x the NxD matrix, k the constant (k=1 if missing)
+closure=function(x, k){ 
   if (missing(k)){
     newx <- (x)/rowSums(x)
     return(newx)
@@ -66,7 +62,6 @@ closure=function(x, k){ # x the NxD matrix, k the constant (k=1 if missing)
 ## Helmert Matrix for D parts
 
 ```{r} 
-# Creates de Helmert Matrix given the number of parts of the variable
 V_D = function(D){ # D is the dimension (parts)
   V_D = matrix(0L, nrow =D , ncol = D-1)
   for (i in 1:(D-1)){  # pseudodiagonal elements
@@ -120,7 +115,7 @@ inverseilr=function(x,V){
 ## ALR
 
 ```{r}
-alr = function(x,R=dim(x)[2]){ # x: N x D matrix, R : Reference (last term by default)
+alr = function(x,R=dim(x)[2]){ # x: N x D matrix, R : Reference (last term as default)
   if (is.null(attr(x, "space"))){attr(x, "space") <- "simplex"}
   if (attr(x, "space")=="alr_coord"){stop("The matrix is already in the ALR coordinates space.")}
   if (attr(x, "space")=="ilr_coord"){stop("The matrix is in the ILR coordinates space. Matrix should be in the simplex space.")}
@@ -912,7 +907,8 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE){
     Bs=as.matrix(rbind(Bs, Bstar[1,]))
     h=2
   }
-
+  
+  xdimlist=list()
   for (i in 1:length(X)){
     if (is.null(attr(X[[i]],"space"))){dimx = dim(X[[i]])[2]} #number of parts of this variable i of X D parts --> D-1 param in the ilr 
     if (!is.null(attr(X[[i]],"space"))){
@@ -921,6 +917,7 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE){
       }
       else{dimx = dim(X[[i]])[2]+1}
     }
+    xdimlist[i] = dimx
     if (h==(h+dimx-2)){matrix_x = t(matrix(Bstar[h,]))}
     if (h!=(h+dimx-2)){matrix_x = Bstar[h:(h+dimx-2),] }
     
@@ -958,7 +955,7 @@ ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE){
   attr(resid,"contrast") = NULL
   
   
-  reslist = list(Y_coord = ty, X_coord = tx, constant = constant, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
+  reslist = list(Y_coord = ty, X_coord = tx, constant = constant, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues, xdim=xdimlist)
   attr(reslist, "reg_type") = "ilr_x_reg"
   return(reslist)
 }
@@ -1042,7 +1039,7 @@ alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE){
   }
   xdimlist=list()
   for (i in 1:length(X)){
-    if (is.null(attr(X[[i]],"space"))){dimx = dim(X[[i]])[2]} #number of parts of this variable i of X D parts --> D-1 param in the alr 
+    if (is.null(attr(X[[i]],"space"))){dimx = dim(X[[i]])[2]}  
     if (!is.null(attr(X[[i]],"space"))){
       if (attr(X[[i]],"space")=="simplex"){
         dimx = dim(X[[i]])[2]
@@ -1309,9 +1306,6 @@ alr_x_impacts = function(results){ # the unique argument is the named list that 
 }
 ```
 
-```{r}
-ilr_yx_reg(m1,list(m2),list(m3,m5),constant=T)$B_simplex
-```
 
 
 ## ilr_y_reg
@@ -1573,17 +1567,58 @@ alr_y_impacts = function(results){
 ## general impacts function
 
 ```{r}
-impacts = function(results){
+impacts = function(results, p_values=FALSE){
   if (attr(results,"reg_type")=="alr_x_reg"){return(alr_x_impacts(results))}
   if (attr(results,"reg_type")=="alr_y_reg"){return(alr_y_impacts(results))}
   if (attr(results,"reg_type")=="alr_yx_reg"){return(alr_yx_impacts(results))}
-  if (attr(results,"reg_type")=="ilr_x_reg"){return(ilr_x_impacts(results))}
+  if (attr(results,"reg_type")=="ilr_x_reg"){
+    imps_original = ilr_x_impacts(results)
+    if (p_values==F){return(imps_original)}
+    imps = imps_original
+    ss = se_x(results)
+    signs = imps
+    for (j in 1:dim(imps)[2]){
+      for (i in 1:dim(imps)[1]){
+        val = imps[i,j]
+        tt = val/ss[i,j]
+        pval = 1+pnorm(-abs(tt))-pnorm(abs(tt))
+        if ((pval>0.05)&(pval<0.10)){
+          signs[i,j]  = "*  "
+        }
+        if ((pval<0.05)&(pval>0.01)){
+          signs[i,j]  = "** "
+        }
+        if (pval<0.01){
+          signs[i,j]  = "***"
+        }
+        else{
+          signs[i,j]  = "   "
+        }
+      }
+    }
+    for (i in (dim(signs)[2]):1){
+      orignames = colnames(imps)
+      nnames_i = "   "
+      if (i==dim(imps)[2]){
+        newnames  = c(orignames[1:i],nnames_i)
+        newmat    = cbind(imps[,1:i],signs[,i])
+      }
+      else{
+        newnames  = c(orignames[1:i],nnames_i,orignames[(i+1):length(orignames)])
+        newmat    = cbind(imps[,1:i],signs[,i],imps[,(i+1):(dim(imps)[2])])
+      }
+      imps = newmat
+      orignames = newnames
+      colnames(imps) = orignames
+    }
+    print(imps, quote=FALSE)
+    return(cat("\n"))
+  }
   if (attr(results,"reg_type")=="ilr_y_reg"){return(ilr_y_impacts(results))}
   if (attr(results,"reg_type")=="ilr_yx_reg"){return(ilr_yx_impacts(results))}
   else{stop("Input in 'impacts()' function is not a valid output of one of the regression functions.")}
 }
 ```
-
 
 ## summary for impacts (only for yx and y models. For x models it makes no sense.)
 
@@ -1836,8 +1871,8 @@ reg = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=lis
   }
     if (simplex_pvalues=="bootstrap"){
       sigmat = dfsimplex
-      if (model_type=="y_reg"){pvals = p_values_coef(dataset = dataset,formula = formula,transformation = transformation,V=V,R=R,B=B,seed=seed)}
-      if (model_type=="yx_reg"){pvals = p_values_coef(dataset = dataset,formula = formula,transformation = transformation,V=V,R=R,B=B,seed=seed)}
+      if (model_type=="y_reg"){pvals = p_values_coef_y(dataset = dataset,formula = formula,transformation = transformation,V=V,R=R,B=B,seed=seed)}
+      if (model_type=="yx_reg"){pvals = p_values_coef_y(dataset = dataset,formula = formula,transformation = transformation,V=V,R=R,B=B,seed=seed)}
       if (model_type=="x_reg"){pvals = p_values_coef_x(dataset = dataset,formula = formula,transformation = transformation,V=V,R=R,B=B,seed=seed)}
       for (i in 1:(dim(dfsimplex)[1])){
         for (j in 1:(dim(dfsimplex)[2])){
@@ -1846,10 +1881,10 @@ reg = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=lis
           if ((pval>0.05)&(pval<0.10)){
             sigmat[i,j] = "*  "
           }
-          if ((pval<0.05)&(pval>0.01)){
+          if ((pval<=0.05)&(pval>0.01)){
             sigmat[i,j] = "** "
           }
-          if (pval<0.01){
+          if (pval<=0.01){
             sigmat[i,j] = "***"
           }
           else{
@@ -1895,8 +1930,18 @@ reg = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=lis
   cat(arg1,"\n")
   print(arg2,quote=FALSE)
   cat(arg3,"\n", arg4,"\n")
-  print(arg5,quote=FALSE)
+  print(tidy(arg5),quote=FALSE)
   cat(arg6,"\n", arg7,"\n", arg8,"\n")
+}
+```
+
+
+```{r}
+prueba = function(pval){
+      if ((pval>0.05)&(pval<0.10)){
+        print("si")
+      }
+      else{ print("No")}
 }
 ```
 
@@ -1942,8 +1987,9 @@ p_values_se = function(dataset, formula, observation, transformation = "ILR", V=
 
 
 ```{r}
-p_values_coef = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=list(NULL), B=1000, seed=31000){
+p_values_coef_y = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=list(NULL), B=1000, seed=31000){
   results = list()
+  model_type = check_formula(dataset,formula)$model_type
   set.seed(seed)
   for (b in 1:B){
     ids <- sample(x=nrow(dataset), size=dim(dataset)[1], replace=T)
@@ -1955,13 +2001,15 @@ p_values_coef = function(dataset, formula, transformation = "ILR", V=list(matrix
   pvals = results[[1]]
   attr(pvals,"space")=NULL
   P = dim(pvals)[2]
+  dp = 0
+  if (model_type=="y_reg"){dp = 1/P}
   for (i in 1:(dim(pvals)[1])){
     for (j in 1:(dim(pvals)[2])){
       dist = c()
       for (b in 1:B){
         dist = c(dist, results[[b]][i,j])
       }
-      lowers = sum(dist<(1/P))/B
+      lowers = sum(dist<(dp))/B
       pvals[i,j] = 2*min(lowers,1-lowers)
     }
   }
@@ -2012,6 +2060,66 @@ p_values_coef_x = function(dataset, formula, transformation = "ILR", V=list(matr
     }
   }
   return(pvals)
+}
+```
+
+### exact semi-elasticities for x compo models
+
+```{r}
+se_x = function(reg_results){ 
+  constant = reg_results$constant
+  xdim = reg_results$xdim
+  imp_results = ilr_x_impacts(reg_results)
+  y_parts = dim(imp_results)[2]
+  nrows = dim(imp_results)[1]
+  dimres = dim(reg_results$Bcoord_cov)[1]
+  matsds = reg_results$Bcoord_cov
+  x_parts = 0
+  for (k in 1:length(xdim)){
+    x_parts = x_parts + xdim[[k]][1] - 1
+  }
+  
+  matl = dimres / y_parts
+  matlist = list()
+  t=1
+  
+  for (k in 1:y_parts){
+    matlist[[k]] = as.matrix(matsds[t:(t+matl-1),t:(t+matl-1)])
+    if (constant){matlist[[k]]=matlist[[k]][-1,-1]}
+    matlist[[k]] = matlist[[k]][1:x_parts,1:x_parts]
+    t=t+matl
+  }
+  
+  sds = c()
+  reds = list()
+  for (k in 1:y_parts){
+    h=1
+    for (j in 1:length(xdim)){
+      fin = h+xdim[[j]]-2
+      redmat = as.matrix(matlist[[k]][h:fin,h:fin])
+      var_j = V_D(xdim[[j]])%*%redmat%*%t(V_D(xdim[[j]]))
+      sds = c(sds,sqrt(diag(var_j)))
+      h=h+xdim[[j]]-1
+    }
+  }
+  result_mat = t(matrix(sds, y_parts,nrows, byrow=T))
+  return(result_mat)
+}
+```
+
+```{r}
+tidy = function(matrix, dig=14){
+  for (j in 1:dim(matrix)[2]){
+    if ((substr(matrix[1,j],1,1)!=" ")&(substr(matrix[1,j],1,1)!="*")){
+      for (i in 1:dim(matrix)[1]){
+        if (substr(matrix[i,j],1,1) != "-"){
+          matrix[i,j] = paste(" ",matrix[i,j], sep="")
+        }
+        matrix[i,j] = substr(matrix[i,j],1,dig)
+      }
+    }
+  }
+  return(matrix)
 }
 ```
 
