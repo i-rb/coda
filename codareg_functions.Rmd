@@ -13,31 +13,6 @@ output:
 This notebook is only to create the package
 
 ```{r}
-example_matrices = function(){
-m1 = rbind(c(0.25,0.3,0.2),c(0.5,0.2,0.3),c(0.9,0.05,0.05),c(0.33,0.4,0.24),c(0.2,0.3,0.5),c(0.91,0.05,0.04),c(0.1,0.7,0.2)) 
-m2 = rbind(c(0.1,0.4,0.25,0.25),c(0.3,0.3,0.3,0.1),c(0.9,0.05,0.02,0.03),c(0.1,0.7,0.15,0.05),c(0.8,0.1,0.05,0.05),c(0.35,0.25,0.3,0.1),c(0.4,0.1,0.1,0.4)) 
-m3 = matrix(c(23,1,32,12,9,11,3)) 
-m4 = rbind(c(0.2,0.8),c(0.3,0.7),c(0.9,0.1),c(0.75,0.25),c(0.3,0.7),c(0.15,0.85),c(0.9,0.1))
-m5 = rbind(c(3,-4.3),c(0,-2),c(4,5),c(-2,3), c(4,2), c(1,11), c(23,2))
-return(list(m1,m2,m3,m4,m5))}
-```
-
-```{r}
-m1 = example_matrices()[[1]]
-m2 = example_matrices()[[2]]
-m3 = example_matrices()[[3]]
-m4 = example_matrices()[[4]]
-m5 = example_matrices()[[5]]
-```
-
-
-```{r}
-load("/Users/ivanrendobarreiro/coda/packageone/data/BDDSegX.RData")
-```
-
-
-
-```{r}
 # this is to delete the past elements in the enviroment
 rm(list = ls())
 ```
@@ -1689,7 +1664,7 @@ share_ratio_summary = function(results){
 }
 ```
 
-### p_values 
+## p_values 
 
 ```{r}
 p_values_coef = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=list(NULL), B=1000, seed=31000){
@@ -1952,7 +1927,7 @@ prueba = function(pval){
 ```
 
 
-### pvalues semielasticities
+## pvalues semielasticities
 
 ideas:
 
@@ -1989,7 +1964,7 @@ p_values_se = function(dataset, formula, observation, transformation = "ILR", V=
 }
 ```
 
-### P values for x impacts (chage names or pool)
+## P values for x impacts (chage names or pool)
 
 
 ```{r}
@@ -2069,7 +2044,7 @@ p_values_coef_x = function(dataset, formula, transformation = "ILR", V=list(matr
 }
 ```
 
-### exact semi-elasticities for x compo models
+## exact semi-elasticities for x compo models
 
 ```{r}
 se_x = function(reg_results){ 
@@ -2113,6 +2088,8 @@ se_x = function(reg_results){
 }
 ```
 
+## Function to present results in a more elegant way
+
 ```{r}
 tidy = function(matrix, dig=14){
   for (j in 1:dim(matrix)[2]){
@@ -2129,5 +2106,10 @@ tidy = function(matrix, dig=14){
 }
 ```
 
+## Package skeleton
+
+```{r}
+package.skeleton("")
+```
 
 
