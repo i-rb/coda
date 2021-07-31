@@ -1,0 +1,2115 @@
+---
+title: "create_package"
+output:
+  html_notebook:
+    toc: yes
+  html_document:
+    df_print: paged
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+
+This notebook is only to create the package
+
+```{r}
+# this is to delete the past elements in the enviroment
+rm(list = ls())
+```
+
+# All Defined Functions 
+
+## Closure
+
+```{r}
+closure=function(x, k){ 
+  if (missing(k)){
+    newx <- (x)/rowSums(x)
+    return(newx)
+  }
+  else{
+    newx <- (k*x)/rowSums(x)
+    return(newx)
+  }
+} 
+```
+
+## Helmert Matrix for D parts
+
+```{r} 
+V_D = function(D){ # D is the dimension (parts)
+  V_D = matrix(0L, nrow =D , ncol = D-1)
+  for (i in 1:(D-1)){  # pseudodiagonal elements
+    V_D[i,i] = (D-i)/(sqrt((D-i+1)*(D-i)))
+  }
+  for (i in 2:D){ # below pseudodiagonal elements
+    for (j in 1:i-1){
+      V_D[i,j]=-1/(sqrt((D-j+1)*(D-j)))
+    }
+  } 
+  return(V_D)
+}
+```
+
+## ILR Transformation
+
+```{r}
+ilr = function(x, V){ # x matrix N x D
+  if (is.null(attr(x, "space"))){attr(x, "space") <- "simplex"}
+  if (attr(x, "space")=="ilr_coord"){stop("The matrix is already in the ILR coordinates space.")}
+  if (attr(x, "space")=="alr_coord"){stop("The matrix is in the ALR coordinates space. Matrix should be in the simplex space.")}
+  if (missing(V)){V=V_D(dim(x)[2])}
+  x = closure(x)
+  ilr_mat = t(t(V)%*%t(log(x)))
+  attr(ilr_mat, "space") <- "ilr_coord"
+  attr(ilr_mat, "contrast") <- V
+  return(ilr_mat)
+}
+```
+
+## Inverse of the ILR
+
+```{r}
+inverseilr=function(x,V){
+  if (is.null(attr(x, "space"))){attr(x, "space") <- "ilr_coord"}
+  if (attr(x, "space")=="simplex"){stop("The matrix is already in the simplex space.")}
+  x = t(x)
+  if (missing(V)){
+    if (is.null(attr(x,"contrast"))){
+      V=V_D(dim(x)[1]+1)
+    }
+    else{V = attr(x,"contrast")}
+  }
+  inv_mat = closure(t(exp(V%*%x)))
+  attr(inv_mat,"space") = "simplex"
+  attr(inv_mat,"contrast") = NULL
+  return(inv_mat)
+}
+```
+
+## ALR
+
+```{r}
+alr = function(x,R=dim(x)[2]){ # x: N x D matrix, R : Reference (last term as default)
+  if (is.null(attr(x, "space"))){attr(x, "space") <- "simplex"}
+  if (attr(x, "space")=="alr_coord"){stop("The matrix is already in the ALR coordinates space.")}
+  if (attr(x, "space")=="ilr_coord"){stop("The matrix is in the ILR coordinates space. Matrix should be in the simplex space.")}
+  copy = x
+  for (i in 1:(dim(x)[1])){
+    trans = numeric(dim(x)[2])
+    for (j in 1:(dim(x)[2])){
+      trans[j]= log(x[i,j]/x[i,R])
+    }
+    copy[i,] = trans
+  }
+  copy = as.matrix(copy[,-R])
+  attr(copy, "space") <- "alr_coord"
+  attr(copy, "reference") <- R
+  return(copy)
+}
+```
+
+
+## Inverse ALR
+
+```{r}
+inversealr = function(x,R=dim(x)[2]+1){ # x = NxD-1 matrix, R original reference variable
+  if (is.null(attr(x, "space"))){attr(x, "space") <- "alr_coord"}
+  if (attr(x, "space")=="simplex"){stop("The matrix is already in the simplex space.")}
+  D_1 = dim(x)[2]
+  if (R==(D_1+1)){aumented = cbind(x,numeric(dim(x)[1]))}
+  if (R==1){aumented = cbind(numeric(dim(x)[1]),x)}
+  if ((R!=(D_1+1)&(R!=1))){
+    if (dim(x)[1]==1){
+      aumented = cbind(t(as.matrix(x[,1:R-1])),t(numeric(dim(x)[1])),t(as.matrix(x[,R:D_1])))}
+    else{aumented = cbind(x[,1:R-1],numeric(dim(x)[1]),x[,R:D_1])
+    }
+  }
+  res = closure(exp(aumented))
+  attr(res,"space") = "simplex"
+  attr(res,"reference") = NULL
+  return(res)
+}
+```
+
+
+## Estimation of the coefficients of any multivariate regression
+
+```{r}
+mlm = function(Y,X){ 
+  B = solve(crossprod(X),crossprod(X,Y),tol=1e-21)
+  return(B)
+}
+```
+
+## Varaince-covariance matrix
+
+```{r}
+est_var = function(X,Y,B){ # page 146 kevin
+  if (missing(B)){B=mlm(Y,X)}
+  n=dim(Y)[1]
+  sig = (1/n)*t(Y-X%*%B)%*%(Y-X%*%B)
+  return(sig)
+}
+```
+
+## Covariance of parameters (kevin book p145)
+
+```{r}
+b_cov = function(X,Y,B){
+  sig = est_var(X,Y,B)
+  cov = kronecker(sig,solve(t(X)%*%X))
+  return(cov)
+}
+```
+
+## Transform every variable (ILR or not, not ALR) to ILR
+
+
+```{r}
+var2ilr = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE){ 
+  
+  # determine if variables are in the simplex or in ILR coordinates
+  n_simplex = 0
+  n_ilr     = 0
+  
+  if (is.null(attr(Y,"space"))){
+    n_simplex = 1
+  }
+  
+  if (!is.null(attr(Y,"space"))){
+    if (attr(Y,"space")=="simplex"){
+      n_simplex=1
+    }
+    else{
+      n_ilr=1
+    }
+  }
+  
+  for (k in 1:length(X)){
+    if (is.null(attr(X[[k]],"space"))){
+    n_simplex = n_simplex+1}
+    if (!is.null(attr(X[[k]],"space"))){
+      if (attr(X[[k]],"space")=="simplex"){
+        n_simplex=n_simplex+1
+        }
+      else{
+        n_ilr=n_ilr+1
+      }
+    }
+  }
+  
+  # case when X, Y is in the simplex
+  
+  # if V specified
+  
+  if (!is.na(V[[1]][1,1])){
+    if (length(V)!=(1+length(X))){stop("When using the optional argument 'V' it is needed to specify one base matrix for the independent variable and one for each of the q dependent variable in a list that takes the form V = list(V_Y,V_X1...,V_Xq).")}
+    }
+    
+  # if V not specified
+  
+  if (n_ilr==0){
+    if (is.na(V[[1]][1,1])){
+      V=list(V_D(dim(Y)[2])) # this the 'standard' contrast matrix for Y
+      for (i in 1:length(X)){ # here 'standard' contrast matrices for X are added
+        V=c(V,list(V_D(dim(X[[i]])[2])))
+      }
+    }
+    
+  # now we have V for the simplex variables case
+  
+  # transform Y into ilr coordinates
+
+  ty = ilr(Y, V[[1]])
+    
+  # transform X to the ilr coordinates
+  tx = matrix(numeric(dim(X[[1]])[1]))+1 # here it is created a matrix which is a vector of ones (should be removed afterwords if c=False)
+  for (i in 1:length(X)){
+    tx = cbind(tx,ilr(X[[i]],V[[i+1]])) # the transformed X is created as a unique matrix
+    }
+  if (constant==FALSE){ # should remove the vector of zeros if no constant is required
+    tx=tx[,-1]
+    }
+  if (!is.na(Z[[1]][1,1])){
+    for (z in Z){
+      tx=cbind(tx,z)
+    }
+  }
+  }
+  
+  
+  # case where some variables in the simplex, some in ilr
+  
+  if (min(c(n_simplex,n_ilr))!=0){
+    stop("Every variable should be in the same space, whether ilr coordinates or the simplex.")
+  }
+    
+  # every variable in ilr coordinates: V should be specified in the arguments or in the attributes of the data Y,X
+  
+  if (!is.na(V[[1]][1,1])){
+    if (!is.null(attr(Y,"contrast"))){
+      equal = TRUE
+      for (k in 1:(length(X)+1)){
+        if (k==1){
+          vk = V[[1]]
+          va = attr(Y,"contrast")
+          tof = all(dim(vk)==dim(va)) && all(vk==va)
+          if (!tof){
+            equal = FALSE
+          }
+        }
+        else{
+          vk = V[[k]]
+          va = attr(X[[k-1]],"contrast")
+          tof = all(dim(vk)==dim(va)) && all(vk==va)
+          if (!tof){
+            equal = FALSE
+          }
+        }
+      }
+      if (!equal){warning("At least one contrast matrix given in V does not coincide with its analogous in the attributes of the data.\n")}
+    }
+  }
+  
+  if (n_simplex==0){
+    # construct ty (and recover V if not specified)
+    if (is.na(V[[1]][1,1])){
+      if (is.null(attr(Y,"contrast"))){
+        stop("When using data in the coordinates space, their associated contrast matrices are needed. They can be attached as an attribute of each matrix of data or directly given as an input in V.")}
+      else{
+        V[[1]]=attr(Y,"contrast")
+        for (k in 1:length(X)){V[[k+1]]=attr(X[[k]],"contrast")
+        }
+      }
+    }
+    ty = Y
+    # construct tx (and recover V)
+    tx = matrix(numeric(dim(X[[1]])[1]))+1
+    for (k in 1:length(X)){
+      tx = cbind(tx,X[[k]])
+      }
+    if(constant==FALSE){ # should remove the vector of zeros if no constant is required
+      tx=tx[,-1]
+      }
+    if (!is.na(Z[[1]][1,1])){
+      for (z in Z){
+        tx=cbind(tx,z)
+      }
+    }
+  }
+  
+  return (list(Y=ty,X=tx,V=V,constant=constant))
+}
+```
+
+
+
+
+
+## ILR yx reg
+
+```{r}
+ilr_yx_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE){
+  if (constant){x_col_names = c("intercept")}
+  else{x_col_names = c()}
+  
+  for (i in 1:length(X)){
+    if (is.null(colnames(X[[i]]))){
+      for (j in 1:(dim(X[[i]])[2])){
+        x_col_names = c(x_col_names, paste("X_",i,"_",j,sep=""))
+      }
+    }
+    else{x_col_names = c(x_col_names,colnames(X[[i]]))}
+  }
+  if (!is.na(Z[[1]][1,1])){
+    for (i in 1:length(Z)){
+      if (is.null(colnames(Z[[i]]))){
+      for (j in 1:(dim(Z[[i]])[2])){
+        x_col_names = c(x_col_names, paste("Z_",i,"_",j,sep=""))
+      }
+    }
+      else{x_col_names = c(x_col_names,colnames(Z[[i]]))
+      }
+    }
+  }
+  
+  if (is.null(colnames(Y))){
+    y_col_names = c()
+    for (i in 1:(dim(Y)[2])){
+      y_col_names = c(y_col_names, paste("Y_",i,sep=""))
+    }
+  }
+  else{y_col_names = colnames(Y)}
+  
+  input = var2ilr(Y,X,Z,V=V,constant = constant)
+  ty = input$Y
+  tx = input$X
+
+  if (sum(is.na(ty))>0){stop("There are NAs in the Y variable.")}
+  if (sum(is.na(tx))>0){stop("There are NAs in the X variable.")}
+  
+  constant = input$constant
+  V = input$V
+
+  Bstar = mlm(ty,tx)
+  bcov = b_cov(tx,ty,Bstar)
+  Bs = t(matrix(numeric(dim(Y)[2])))
+  
+  h=1
+  if (constant==TRUE){
+    h=2
+    b0=inverseilr(t(Bstar[1,]),V[[1]])
+    Bs = rbind(Bs, b0)
+  }
+  for (i in 1:length(X)){
+    if (is.null(attr(X[[i]],"space"))){dimx = dim(X[[i]])[2]} #number of parts of this variable i of X D parts --> D-1 param in the ilr 
+    if (!is.null(attr(X[[i]],"space"))){
+      if (attr(X[[i]],"space")=="simplex"){
+        dimx = dim(X[[i]])[2]
+      }
+      else{dimx = dim(X[[i]])[2]+1}
+    }
+    if (h==(h+dimx-2)){matrix_x = t(matrix(Bstar[h,]))}
+    if (h!=(h+dimx-2)){matrix_x = Bstar[h:(h+dimx-2),] }
+    B_q = V[[1]]%*%t(matrix_x)%*%t(V[[i+1]])
+    Bs= rbind(Bs, t(B_q))
+    h=h+dimx-1
+  }
+  
+  if (!is.na(Z[[1]][1,1])){
+    for (i in 1:length(Z)){
+      dimz = dim(Z[[i]])[2]
+      if (h==(h+dimz-1)){matrix_z = t(matrix(Bstar[h,]))}
+      if (h!=(h+dimz-1)){matrix_z = Bstar[h:(h+dimz-1),]} # it is non comp, it does not lose a dimension in the transformation
+      h=h+dimz
+      c_k = inverseilr(matrix_z, V[[1]])
+      Bs = rbind(Bs, c_k)
+    }
+  }
+  Bs = Bs[-1,]
+  attr(Bstar,"space")="ilr_coord"
+  attr(Bstar,"contrast") = V
+  
+  attr(tx,"space") = "ilr_coord"
+  attr(tx,"contrast") = V[-1]
+  
+  
+  fittedvalues = tx%*%Bstar
+  resid = ty- fittedvalues
+  attr(resid,"space") = NULL
+  attr(resid,"contrast") = NULL
+  colnames(Bs) = y_col_names
+  rownames(Bs) = x_col_names
+  attr(Bs,"space")="simplex"
+  
+  reslist = list(Y_coord = ty, X_coord = tx, constant = constant, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
+  attr(reslist,"reg_type") = "ilr_yx_reg"
+  
+  return(reslist) 
+}
+```
+
+## Transform every variable to ALR
+
+```{r}
+var2alr = function(Y,X,Z=list(matrix()),R=list(matrix()),constant=TRUE){ 
+  
+  # determine if variables are in the simplex or in ALR coordinates
+  n_simplex = 0
+  n_alr     = 0
+  
+  if (is.null(attr(Y,"space"))){
+    n_simplex = 1
+  }
+  
+  if (!is.null(attr(Y,"space"))){
+    if (attr(Y,"space")=="simplex"){
+      n_simplex=1
+    }
+    else{
+      n_alr=1
+    }
+  }
+  
+  for (k in 1:length(X)){
+    if (is.null(attr(X[[k]],"space"))){
+    n_simplex = n_simplex+1}
+    if (!is.null(attr(X[[k]],"space"))){
+      if (attr(X[[k]],"space")=="simplex"){
+        n_simplex=n_simplex+1
+        }
+      else{
+        n_alr=n_alr+1
+      }
+    }
+  }
+  
+  # case when X, Y is in the simplex
+  
+  # if R specified
+  
+  if (!is.na(R[[1]])){
+    if (length(R)!=(1+length(X))){stop("When using the optional argument 'R' it is needed to specify one reference for the independent variable and one for each of the q dependent variable in a list that takes the form R = list(R_Y,R_X1...,R_Xq).")}
+    }
+    
+  # if R not specified
+  
+  if (n_alr==0){
+    if (is.na(R[[1]])){
+      R=list(dim(Y)[2])
+      for (i in 1:length(X)){ # here 'standard' contrast matrices for X are added
+        R[[i+1]]=dim(X[[i]])[2]
+      }
+    }
+    
+  # now we have R for the simplex variables case
+  
+  # transform Y into alr coordinates
+
+  ty = alr(Y, R[[1]])
+    
+  # transfrom X to the alr coordinates
+  tx = matrix(numeric(dim(X[[1]])[1]))+1 # here it is created a matrix which is a vector of ones (should be removed afterwords if c=False)
+  for (i in 1:length(X)){
+    tx = cbind(tx,alr(X[[i]],R[[i+1]])) # the transformed X is created as a unique matrix
+    }
+  if (constant==FALSE){ # should remove the vector of zeros if no constant is required
+    tx=tx[,-1]
+    }
+  if (!is.na(Z[[1]][1,1])){
+    for (z in Z){
+      tx=cbind(tx,z)
+    }
+  }
+  }
+  
+  
+  # case where some variables in the simplex, some in alr
+  
+  if (min(c(n_simplex,n_alr))!=0){
+    stop("Every variable should be in the same space, whether alr coordinates or the simplex.")
+  }
+    
+  # every variable in alr coordinates: R should be specified in the arguments or in the attributes of the data Y,X
+  
+  if (!is.na(R[[1]])){
+    if (!is.null(attr(Y,"reference"))){
+      equal = TRUE
+      for (k in 1:(length(X)+1)){
+        if (k==1){
+          vk = R[[1]]
+          va = attr(Y,"reference")
+          tof = all(dim(vk)==dim(va)) && all(vk==va)
+          if (!tof){
+            equal = FALSE
+          }
+        }
+        else{
+          vk = R[[k]]
+          va = attr(R[[k-1]],"reference")
+          tof = all(dim(vk)==dim(va)) && all(vk==va)
+          if (!tof){
+            equal = FALSE
+          }
+        }
+      }
+      if (!equal){warning("At least one alr reference given does not coincide with its analogous in the attributes of the data.\n")}
+    }
+  }
+  
+  if (n_simplex==0){
+    # construct ty (and recover R if not specified)
+    if (is.na(R[[1]])){
+      if (is.null(attr(Y,"reference"))){
+        stop("When using data in the coordinates space, their associated references list is needed. It can be attached as an attribute of each matrix of data or directly given as an input in R.")}
+      else{
+        R[[1]]=attr(Y,"reference")
+        for (k in 1:length(X)){R[[k+1]]=attr(X[[k]],"reference")
+        }
+      }
+    }
+    ty = Y
+    # construct tx (and recover V)
+    tx = matrix(numeric(dim(X[[1]])[1]))+1
+    for (k in 1:length(X)){
+      tx = cbind(tx,X[[k]])
+      }
+    if(constant==FALSE){ # should remove the vector of zeros if no constant is required
+      tx=tx[,-1]
+      }
+    if (!is.na(Z[[1]][1,1])){
+      for (z in Z){
+        tx=cbind(tx,z)
+      }
+    }
+  }
+  
+  return (list(Y=ty,X=tx,R=R,constant=constant))
+}
+```
+
+
+## P_D matrix
+
+```{r}
+P_D = function(D){
+  return(rbind(diag(D-1),numeric(D-1)))
+}
+```
+
+## F_D matrix
+
+```{r}
+F_D = function(D){
+  fd = diag(D-1)
+  fd = cbind(fd, numeric(D-1)-1)
+  return(fd)
+}
+```
+
+## K_D matrix
+
+```{r}
+K_D = function(D){
+  upm = diag(D-1) - (numeric(D-1)+1)%*%t(numeric(D-1)+1)/D
+  down = -t(numeric(D-1)+1)/D
+  upm = rbind(upm,down)
+  return (upm)
+}
+```
+
+## Permutation of a column to the last position
+
+```{r}
+permutation_D = function(mat,P){ # this function takes as an input a matrix (mat) and position (P) and returns the same matrix but with the column P as the last column, i.e: [x1,x2...,xP,...,xN] -> [x1,x2...,xN,xP]
+  D = dim(mat)[2]
+  if (D==P){
+    return(mat)
+  }
+  if (1==P){
+    return(cbind(mat[,2:D],mat[,1]))
+  }
+  else{
+    return(cbind(mat[,1:(P-1)],mat[,(P+1):D],mat[,P]))
+  }
+}
+```
+
+## Inverse of the permutation
+
+```{r}
+inv_permutation_D = function(mat,P){ # undoes the permutation
+  D = dim(mat)[2]
+  dy = dim(mat)[1]
+  if (dy!=1){
+    if (D==P){
+      return(mat)
+    }
+    if (1==P){
+      return(cbind(mat[,D],mat[,1:(D-1)]))
+    }
+    else{
+      return(cbind(mat[,1:(P-1)],mat[,D],mat[,(P):(D-1)]))
+    }
+  }
+  else{
+    if (D==P){
+      return(mat)
+    }
+    if (1==P){
+      return(cbind(as.matrix(mat[,D]),t(as.matrix(mat[,1:(D-1)]))))
+    }
+    else{
+      return(cbind(t(as.matrix(mat[,1:(P-1)])),t(as.matrix(mat[,D])),t(as.matrix(mat[,(P):(D-1)]))))
+    }
+  }
+}
+```
+
+
+## ALR yx reg
+
+```{r}
+alr_yx_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE){
+  
+  if (constant){x_col_names = c("intercept")}
+  else{x_col_names = c()}
+  
+  for (i in 1:length(X)){
+    if (is.null(colnames(X[[i]]))){
+      for (j in 1:(dim(X[[i]])[2])){
+        x_col_names = c(x_col_names, paste("X_",i,"_",j,sep=""))
+      }
+    }
+    else{x_col_names = c(x_col_names,colnames(X[[i]]))}
+  }
+  if (!is.na(Z[[1]][1,1])){
+    for (i in 1:length(Z)){
+      if (is.null(colnames(Z[[i]]))){
+      for (j in 1:(dim(Z[[i]])[2])){
+        x_col_names = c(x_col_names, paste("Z_",i,"_",j,sep=""))
+      }
+    }
+      else{x_col_names = c(x_col_names,colnames(Z[[i]]))
+      }
+    }
+  }
+  
+  if (is.null(colnames(Y))){
+    y_col_names = c()
+    for (i in 1:(dim(Y)[2])){
+      y_col_names = c(y_col_names, paste("Y_",i,sep=""))
+    }
+  }
+  else{y_col_names = colnames(Y)}
+  
+  
+  if (!is.null(R[[1]])){
+    Y=permutation_D(Y,R[[1]])
+    for (j in 1:length(X)){
+      X[[j]]=permutation_D(X[[j]],R[[j+1]])
+    input = var2alr(Y,X,Z,constant=constant)
+    }
+  }
+  else{
+    input = var2alr(Y,X,Z,constant=constant)
+    R=input$R
+  }
+  
+  ty = input$Y
+  tx = input$X
+  if (sum(is.na(ty))>0){stop("There are NAs in the Y variable.")}
+  if (sum(is.na(tx))>0){stop("There are NAs in the X variable.")}
+  dimy = dim(ty)[2]+1
+  constant = input$constant
+
+  Bstar = mlm(ty,tx)
+  bcov = b_cov(tx,ty,Bstar)
+  Bs = t(matrix(numeric(dim(Y)[2])))
+  
+  h=1
+  if (constant==TRUE){
+    h=2
+    b0=inversealr(t(Bstar[1,]),R[[1]])
+    Bs = rbind(Bs, b0)
+  }
+  for (i in 1:length(X)){
+    if (is.null(attr(X[[i]],"space"))){dimx = dim(X[[i]])[2]} #number of parts of this variable i of X D parts --> D-1 param in the alr 
+    if (!is.null(attr(X[[i]],"space"))){
+      if (attr(X[[i]],"space")=="simplex"){
+        dimx = dim(X[[i]])[2]
+      }
+      else{dimx = dim(X[[i]])[2]+1}
+    }
+    if (h==(h+dimx-2)){matrix_x = t(matrix(Bstar[h,]))}
+    if (h!=(h+dimx-2)){matrix_x = Bstar[h:(h+dimx-2),] }
+    B_q = K_D(dimy)%*%t(matrix_x)%*%F_D(dimx)
+    B_q = t(B_q)
+    B_q = t(inv_permutation_D(t(B_q),R[[i+1]]))
+    Bs= rbind(Bs, B_q)
+    h=h+dimx-1
+  }
+
+  Bs = Bs[-1,]
+  if (constant){
+    Bsintercept = Bs[1,]
+    Bs = Bs[-1,]
+  }
+  Bs = inv_permutation_D(Bs,R[[1]])
+  if (constant){
+    Bs = rbind(Bsintercept,Bs)
+  }
+  
+  if (!is.na(Z[[1]][1,1])){
+    for (i in 1:length(Z)){
+      dimz = dim(Z[[i]])[2]
+      if (h==(h+dimz-1)){matrix_z = t(matrix(Bstar[h,]))}
+      if (h!=(h+dimz-1)){matrix_z = Bstar[h:(h+dimz-1),]} # it is non comp, it does not lose a dimension in the transformation
+      h=h+dimz
+      c_k = inversealr(matrix_z, R[[1]]) 
+      Bs = rbind(Bs, c_k)
+    }
+  }
+
+  
+  attr(Bstar,"space")="alr_coord"
+  attr(Bstar,"reference") = R
+  
+  attr(tx,"space") = "alr_coord"
+  attr(tx,"reference") = R[-1]
+  
+  fittedvalues = tx%*%Bstar
+  resid = ty- fittedvalues
+  attr(resid,"space") = NULL
+  attr(resid,"contrast") = NULL
+  
+  rownames(Bs) = x_col_names
+  colnames(Bs) = y_col_names
+  attr(Bs,"space")="simplex"
+  
+  reslist = list(Y_coord = ty, X_coord = tx, constant = constant, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
+  attr(reslist,"reg_type") = "alr_yx_reg"
+  return(reslist) 
+}
+```
+
+
+## yx impacts (ilr)
+
+```{r}
+ilr_yx_impacts = function(results){ # the unique argument is the named list that comes from the ilr_yx_reg function
+    x_names = rownames(results$B_simplex)
+    y_names = colnames(results$B_simplex)
+    constant = results$constant
+    tx = results$X_coord
+    B = results$B_coord
+    exp_Yilr = tx%*%B
+    Vy = attr(B,"contrast")[[1]]
+    exp_Y_simplex = inverseilr(exp_Yilr,Vy)
+    I_D = diag(dim(exp_Y_simplex)[2])
+    N=dim(exp_Y_simplex)[1]
+    Bsimplex = results$B_simplex
+    impacts = list()
+    for (i in (1:N)){
+      W_i = I_D - matrix(1,dim(exp_Y_simplex)[2],1)%*%exp_Y_simplex[i,]
+      imp_i = t(W_i%*%t(Bsimplex))
+      colnames(imp_i) = y_names
+      rownames(imp_i) = x_names
+      imp_i = imp_i[-1,]
+      impacts[[i]] = imp_i
+    }
+    return(impacts)
+}
+```
+
+
+## yx impacts (alr)
+
+the thing is that from alr results it is needed to use alr_yx_impacts and ilr_yx_impacts is a problem
+
+```{r}
+alr_yx_impacts = function(results){ # the unique argument is the named list that comes from the alr_yx_reg function
+    x_names = rownames(results$B_simplex)
+    y_names = colnames(results$B_simplex)
+    constant = results$constant
+    tx = results$X_coord
+    B = results$B_coord
+    exp_Yilr = tx%*%B
+    Ry = attr(B,"reference")[[1]]
+    exp_Y_simplex = inversealr(exp_Yilr,Ry)
+    I_D = diag(dim(exp_Y_simplex)[2])
+    N=dim(exp_Y_simplex)[1]
+    Bsimplex = results$B_simplex
+    impacts = list()
+    for (i in (1:N)){
+      W_i = I_D - matrix(1,dim(exp_Y_simplex)[2],1)%*%exp_Y_simplex[i,]
+      imp_i = t(W_i%*%t(Bsimplex))
+      colnames(imp_i) = y_names
+      rownames(imp_i) = x_names
+      imp_i = imp_i[-1,]
+      impacts[[i]] = imp_i
+      }
+    return(impacts)
+}
+```
+
+## ILR x reg
+
+```{r}
+ilr_x_reg = function(Y,X,Z=list(matrix()),V=list(matrix()),constant=TRUE){
+  if (constant){x_col_names = c("intercept")}
+  else{x_col_names = c()}
+  
+  for (i in 1:length(X)){
+    if (is.null(colnames(X[[i]]))){
+      for (j in 1:(dim(X[[i]])[2])){
+        x_col_names = c(x_col_names, paste("X_",i,"_",j,sep=""))
+      }
+    }
+    else{x_col_names = c(x_col_names,colnames(X[[i]]))}
+  }
+  if (!is.na(Z[[1]][1,1])){
+    for (i in 1:length(Z)){
+      if (is.null(colnames(Z[[i]]))){
+      for (j in 1:(dim(Z[[i]])[2])){
+        x_col_names = c(x_col_names, paste("Z_",i,"_",j,sep=""))
+      }
+    }
+      else{x_col_names = c(x_col_names,colnames(Z[[i]]))
+      }
+    }
+  }
+  
+  if (is.null(colnames(Y))){
+    y_col_names = c()
+    for (i in 1:(dim(Y)[2])){
+      y_col_names = c(y_col_names, paste("Y_",i,sep=""))
+    }
+  }
+  else{y_col_names = colnames(Y)}
+  
+  ty = Y #already in coordinates
+  if (is.na(V[[1]][1,1])){
+    for (i in 1:length(X)){
+      V[[i]] = V_D(dim(X[[i]])[2])
+    }
+  }
+  
+  tx = matrix(numeric(dim(X[[1]])[1]))+1 # here it is created a matrix which is a vector of ones (should be removed afterwords if c=False)
+  for (i in 1:length(X)){
+    tx = cbind(tx,ilr(X[[i]],V[[i]])) # the transformed X is created as a unique matrix
+    }
+  if (constant==FALSE){ # should remove the vector of zeros if no constant is required
+    tx=tx[,-1]
+    }
+  if (!is.na(Z[[1]][1,1])){
+    for (z in Z){
+      tx=cbind(tx,z)
+    }
+  }
+  
+  if (sum(is.na(ty))>0){stop("There are NAs in the Y variable.")}
+  if (sum(is.na(tx))>0){stop("There are NAs in the X variable.")}
+
+  Bstar = mlm(ty,tx)
+  bcov = b_cov(tx,ty,Bstar)
+  Bs = as.matrix(t(matrix(numeric(dim(Y)[2]))))
+  
+  h=1
+  if (constant==TRUE){
+    b0=Bstar[1,]
+    Bs=as.matrix(rbind(Bs, Bstar[1,]))
+    h=2
+  }
+  
+  xdimlist=list()
+  for (i in 1:length(X)){
+    if (is.null(attr(X[[i]],"space"))){dimx = dim(X[[i]])[2]} #number of parts of this variable i of X D parts --> D-1 param in the ilr 
+    if (!is.null(attr(X[[i]],"space"))){
+      if (attr(X[[i]],"space")=="simplex"){
+        dimx = dim(X[[i]])[2]
+      }
+      else{dimx = dim(X[[i]])[2]+1}
+    }
+    xdimlist[i] = dimx
+    if (h==(h+dimx-2)){matrix_x = t(matrix(Bstar[h,]))}
+    if (h!=(h+dimx-2)){matrix_x = Bstar[h:(h+dimx-2),] }
+    
+    B_q = as.matrix(closure(exp(t(matrix_x)%*%t(V[[i]]))))
+    
+    Bs= as.matrix(rbind(Bs, t(B_q)))
+    h=h+dimx-1
+  }
+
+  if (!is.na(Z[[1]][1,1])){
+    for (i in 1:length(Z)){
+      dimz = dim(Z[[i]])[2]
+      if (h==(h+dimz-1)){matrix_z = t(matrix(Bstar[h,]))}
+      if (h!=(h+dimz-1)){matrix_z = Bstar[h:(h+dimz-1),]} # it is non comp, it does not lose a dimension in the transformation
+      h=h+dimz
+      c_k = as.matrix(matrix_z)
+      Bs = as.matrix(rbind(Bs, c_k))
+    }
+  }
+  Bs = as.matrix(Bs[-1,])
+  attr(Bstar,"space")="ilr_coord"
+  attr(Bstar,"contrast") = V
+  
+  attr(tx,"space") = "ilr_coord"
+  attr(tx,"contrast") = V
+  
+  Bs = as.matrix(Bs)
+  colnames(Bs) = y_col_names
+  rownames(Bs) = x_col_names
+  attr(Bs,"space")="simplex"
+  
+  fittedvalues = tx%*%Bstar
+  resid = ty- fittedvalues
+  attr(resid,"space") = NULL
+  attr(resid,"contrast") = NULL
+  
+  
+  reslist = list(Y_coord = ty, X_coord = tx, constant = constant, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues, xdim=xdimlist)
+  attr(reslist, "reg_type") = "ilr_x_reg"
+  return(reslist)
+}
+```
+
+## ALR x reg
+
+```{r}
+alr_x_reg = function(Y,X,Z=list(matrix()),R=list(NULL),constant=TRUE){
+  
+  if (constant){x_col_names = c("intercept")}
+  else{x_col_names = c()}
+  
+  for (i in 1:length(X)){
+    if (is.null(colnames(X[[i]]))){
+      for (j in 1:(dim(X[[i]])[2])){
+        x_col_names = c(x_col_names, paste("X_",i,"_",j,sep=""))
+      }
+    }
+    else{x_col_names = c(x_col_names,colnames(X[[i]]))}
+  }
+  if (!is.na(Z[[1]][1,1])){
+    for (i in 1:length(Z)){
+      if (is.null(colnames(Z[[i]]))){
+      for (j in 1:(dim(Z[[i]])[2])){
+        x_col_names = c(x_col_names, paste("Z_",i,"_",j,sep=""))
+      }
+    }
+      else{x_col_names = c(x_col_names,colnames(Z[[i]]))
+      }
+    }
+  }
+  
+  if (is.null(colnames(Y))){
+    y_col_names = c()
+    for (i in 1:(dim(Y)[2])){
+      y_col_names = c(y_col_names, paste("Y_",i,sep=""))
+    }
+  }
+  else{y_col_names = colnames(Y)}
+  
+  ty = Y #already in coordinates
+  if (is.null(R[[1]])){
+    for (i in 1:length(X)){
+      R[[i]] = dim(X[[i]])[2]
+      X[[i]]=permutation_D(X[[i]],R[[i]])
+    }
+  }
+  
+  else{
+    for (i in 1:length(X)){
+      X[[i]]=permutation_D(X[[i]],R[[i]])
+      }
+    }
+  
+  tx = matrix(numeric(dim(X[[1]])[1]))+1 # here it is created a matrix which is a vector of ones (should be removed afterwords if constant=False)
+  for (i in 1:length(X)){
+    tx = cbind(tx,alr(X[[i]],dim(X[[i]])[2])) # the transformed X is created as a unique matrix
+    }
+  if (constant==FALSE){ # should remove the vector of zeros if no constant is required
+    tx=tx[,-1]
+    }
+  if (!is.na(Z[[1]][1,1])){
+    for (z in Z){
+      tx=cbind(tx,z)
+    }
+  }
+  
+  if (sum(is.na(ty))>0){stop("There are NAs in the Y variable.")}
+  if (sum(is.na(tx))>0){stop("There are NAs in the X variable.")}
+
+  Bstar = mlm(ty,tx)
+  bcov = b_cov(tx,ty,Bstar)
+  Bs = t(matrix(numeric(dim(Y)[2])))
+
+  h=1
+  if (constant==TRUE){
+    h=2
+    b0=Bstar[1,]
+    Bs=rbind(Bs, Bstar[1,])
+  }
+  xdimlist=list()
+  for (i in 1:length(X)){
+    if (is.null(attr(X[[i]],"space"))){dimx = dim(X[[i]])[2]}  
+    if (!is.null(attr(X[[i]],"space"))){
+      if (attr(X[[i]],"space")=="simplex"){
+        dimx = dim(X[[i]])[2]
+      }
+      else{dimx = dim(X[[i]])[2]+1}
+    }
+    xdimlist[i] = dimx
+    if (h==(h+dimx-2)){matrix_x = t(matrix(Bstar[h,]))}
+    if (h!=(h+dimx-2)){matrix_x = Bstar[h:(h+dimx-2),] }
+    B_q = t(matrix_x)%*%F_D(dimx)
+    B_q = inv_permutation_D(B_q, R[[i]])
+    B_q = closure(exp(B_q))
+    Bs= rbind(Bs, t(B_q))
+    h=h+dimx-1
+  }
+
+  if (!is.na(Z[[1]][1,1])){
+    for (i in 1:length(Z)){
+      dimz = dim(Z[[i]])[2]
+      if (h==(h+dimz-1)){matrix_z = t(matrix(Bstar[h,]))}
+      if (h!=(h+dimz-1)){matrix_z = Bstar[h:(h+dimz-1),]} # it is non comp, it does not lose a dimension in the transformation
+      h=h+dimz
+      c_k = as.matrix(matrix_z)
+      Bs = rbind(Bs, c_k)
+    }
+  }
+  Bs = as.matrix(Bs[-1,])
+  attr(Bstar,"space")="alr_coord"
+  attr(Bstar,"reference") = R
+  
+  attr(tx,"space") = "alr_coord"
+  attr(tx,"reference") = R
+  
+  Bs = as.matrix(Bs)
+  
+  colnames(Bs) = y_col_names
+  rownames(Bs) = x_col_names
+  attr(Bs,"space")="simplex"
+  
+  fittedvalues = tx%*%Bstar
+  resid = ty- fittedvalues
+  attr(resid,"space") = NULL
+  attr(resid,"contrast") = NULL
+  
+  reslist = list(Y_coord = ty, constant = constant, X_coord = tx, B_coord = Bstar, B_simplex = Bs , Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues, xdim=xdimlist)
+  attr(reslist,"reg_type") = "alr_x_reg"
+  return(reslist) 
+}
+```
+
+## check formula
+
+```{r}
+check_formula = function(dataset, formula){ # returns a list of X, a list of Y, a list of Z and the type of model that is specified. It also checks that every value is positive
+  constant = as.logical(attr(terms(formula),"intercept")) 
+  compositional_y = FALSE
+  ytext = as.character(formula)[2]
+  if (substring(ytext,1,6) == "cbind("){
+    compositional_y = TRUE
+  }
+  vars_y = all.vars(formula[[2]])
+  Y = as.matrix(dataset[vars_y[[1]]])
+  if (length(vars_y)>1){
+    for (i in 2:length(vars_y)){
+      Y = cbind(Y, as.matrix(dataset[vars_y[[i]]]))  
+    }
+  } 
+  
+  xtext = as.character(formula)[3]
+  splitted = strsplit(xtext, "\\+|\\-")[[1]]
+  numx=1
+  numz=1
+  X = list() #compo vars
+  Z = list() #standard vars
+  neg = 0 
+  if (compositional_y){neg = sum(Y<=0)}
+  nonumeric = sum(!(is.numeric(Y)))
+  nonumeric = nonumeric + sum((is.nan(Y)))
+  nonumeric = nonumeric + sum((is.na(Y)))
+  
+  for (i in splitted){
+    temp_text = trimws(i)
+    if (!(temp_text=="1" | temp_text=="0")){
+        if (!(substring(temp_text,1,6)=="cbind(")){
+          Z[[numz]]=as.matrix(dataset[temp_text])
+          nonumeric = nonumeric + sum(!(is.numeric(Z[[numz]])))
+          nonumeric = nonumeric + sum((is.na(Z[[numz]])))
+          nonumeric = nonumeric + sum((is.nan(Z[[numz]])))
+          numz = numz + 1
+        }
+        else{
+          compo_text = strsplit(substring(temp_text,7,nchar(temp_text)-1),",")[[1]]
+          compo_mat = as.matrix(dataset[trimws(compo_text[1])])
+          for (k in 2:length(compo_text)){
+            compo_mat = cbind(compo_mat, as.matrix(dataset[trimws(compo_text[k])]))
+          }
+          X[[numx]] = compo_mat
+          neg = neg + sum(X[[numx]]<=0)
+          nonumeric = nonumeric + sum(!(is.numeric(X[[numx]])))
+          nonumeric = nonumeric + sum((is.nan(X[[numx]])))
+          nonumeric = nonumeric + sum((is.na(X[[numx]])))
+          numx = numx + 1 
+        }
+    }
+  }
+  
+  # no negative or 0 values
+  if (nonumeric>0){stop("Variables should be numeric and missing values are not admitted.")}
+  if (neg>0){stop("Values of endogenous and exogenous variables which are compositional should be strictly positive.")}
+  
+  # which compositional model?
+  
+  if (compositional_y == TRUE){
+    if (length(X)>0){
+      cmodel = "yx_reg"
+      if (length(Z)==0){Z=list(matrix())}
+    }
+    else{
+      cmodel = "y_reg"
+      X=Z
+      Z=list(matrix())
+    }
+  }
+  else{
+    if (length(X)>0){
+      cmodel = "x_reg"
+      if (length(Z)==0){Z=list(matrix())}
+    }
+    else{
+      stop("At least one compositional variable should be used in the model.")
+    }
+  }
+  
+  return(list(Y=Y,X=X,Z=Z, model_type = cmodel, constant = constant))
+}
+```
+
+## general regression function
+
+```{r}
+inner_reg = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=list(NULL)){
+  input = check_formula(dataset, formula)
+  Y = input$Y
+  X = input$X
+  Z = input$Z
+  constant = input$constant
+  model_type = input$model_type
+  if (transformation == "ILR"){
+    if (model_type == "yx_reg"){
+      return(ilr_yx_reg(Y=Y,X=X,Z=Z,V=V,constant = constant))
+    }
+    if (model_type == "x_reg"){
+      return(ilr_x_reg(Y=Y,X=X,Z=Z,V=V,constant=constant))
+    }
+    if (model_type == "y_reg"){
+      return(ilr_y_reg(Y=Y,X=X,V=V,constant=constant))
+    }
+  }
+  if (transformation == "ALR"){
+    if (model_type == "yx_reg"){
+      return(alr_yx_reg(Y=Y,X=X,Z=Z,R=R,constant=constant))
+    }
+    if (model_type == "x_reg"){
+      return(alr_x_reg(Y=Y,X=X,Z=Z,R=R,constant=constant))
+    }
+    if (model_type == "y_reg"){
+      return(alr_y_reg(Y=Y,X=X,R=R,constant=constant))
+    }
+  }
+}
+```
+
+## ilr_x_impacts
+
+```{r}
+ilr_x_impacts = function(results){ # the unique argument is the named list that comes from the ilr_x_reg function
+    B = results$B_coord
+    xnames = rownames(results$B_simplex)
+    ynames = colnames(results$B_simplex)
+    constant = results$constant
+    if (constant){xnames = xnames[-1]}
+    Vx = attr(B,"contrast")
+    if (constant){
+      if (dim(B)[2]==1){B=matrix(B[-1,])}
+      else{
+        B = B[-1,]
+      }
+    }
+    h=1
+    impacts=list()
+    for (i in 1:length(Vx)){
+      dimx = dim(Vx[[i]])[1]
+      if (is.null(dim(B))){B=t(matrix(B))}
+      bstar = B[h:(h+dimx-2),]
+      h=h+dimx-1
+      impacts[[i]]=Vx[[i]]%*%bstar
+    }
+    cc=1
+    for (k in (1:length(impacts))){
+      val = impacts[[k]]
+      ldimx = dim(val)[1]
+      colnames(val) = ynames
+      rownames(val) = xnames[cc:(cc+ldimx-1)]
+      cc = cc + ldimx
+      impacts[[k]] = val
+    }
+    ## part of pooling impacts into a single matrix 
+    impacts_mat = impacts[[1]]
+    if (length(impacts)>1){
+      for (j in (2:length(impacts))){
+        impacts_mat = rbind(impacts_mat, impacts[[j]])
+      }
+    }
+    return(impacts_mat)
+    return(impacts)
+}
+```
+
+
+## alr_x_impacts
+
+```{r}
+alr_x_impacts = function(results){ # the unique argument is the named list that comes from the ilr_yx_reg function
+    B = results$B_coord
+    xnames = rownames(results$B_simplex)
+    ynames = colnames(results$B_simplex)
+    constant = results$constant
+    if (constant){xnames = xnames[-1]}
+    listxdim = results$xdim
+    R = attr(B,"reference")
+    if (constant){
+      if (dim(B)[2]==1){B=matrix(B[-1,])}
+      else{
+        B = B[-1,]
+      }
+    }
+    h=1
+    impacts=list()
+    for (i in 1:length(R)){
+      dimx = listxdim[[i]]
+      if (is.null(dim(B))){B=t(matrix(B))}
+      bstar = B[h:(h+dimx-2),]
+      h=h+dimx-1
+      impact_i = t(F_D(dimx))%*%bstar
+      impacts[[i]]= t(inv_permutation_D(t(impact_i),R[[i]]))
+    }
+    cc=1
+    for (k in (1:length(impacts))){
+      val = impacts[[k]]
+      ldimx = dim(val)[1]
+      colnames(val) = ynames
+      rownames(val) = xnames[cc:(cc+ldimx-1)]
+      cc = cc + ldimx
+      impacts[[k]] = val
+    }
+    ## part of pooling impacts into a single matrix 
+    impacts_mat = impacts[[1]]
+    if (length(impacts)>1){
+      for (j in (2:length(impacts))){
+        impacts_mat = rbind(impacts_mat, impacts[[j]])
+      }
+    }
+    return(impacts_mat)
+}
+```
+
+
+
+## ilr_y_reg
+
+```{r}
+ilr_y_reg = function(Y,X,V=list(matrix()),constant=TRUE){
+  if (constant){x_col_names = c("intercept")}
+  else{x_col_names = c()}
+  
+  for (i in 1:length(X)){
+    if (is.null(colnames(X[[i]]))){
+      for (j in 1:(dim(X[[i]])[2])){
+        x_col_names = c(x_col_names, paste("X_",i,"_",j,sep=""))
+      }
+    }
+    else{x_col_names = c(x_col_names,colnames(X[[i]]))}
+  }
+  
+  if (is.null(colnames(Y))){
+    y_col_names = c()
+    for (i in 1:(dim(Y)[2])){
+      y_col_names = c(y_col_names, paste("Y_",i,sep=""))
+    }
+  }
+  else{y_col_names = colnames(Y)}
+  
+  tx = matrix(numeric(dim(X[[1]])[1]))+1 # X = tx as it is already in coord.
+  for (i in 1:length(X)){
+    tx = cbind(tx,X[[i]])
+    }
+  if (constant==FALSE){ # should remove the vector of ones if no constant is required
+    tx=tx[,-1]
+  }
+  
+  # transform Y to coordinates
+  if (!is.na(V[[1]][1,1])){ # if V specified as argument
+    ty = ilr(Y,V[[1]])
+  }
+  
+  else{
+    V=list(V_D(dim(Y)[2])) # if V not specified as argument
+    ty=ilr(Y,V[[1]])}
+  
+  if (sum(is.na(ty))>0){stop("There are NAs in the Y variable.")}
+  if (sum(is.na(tx))>0){stop("There are NAs in the X variable.")}
+  
+  Bstar = mlm(ty,tx)
+  bcov = b_cov(tx,ty,Bstar) 
+  Bs = t(matrix(numeric(dim(Y)[2])))
+  
+  h=1
+  if (constant==TRUE){
+    h=2
+    b0=inverseilr(t(Bstar[1,]),V[[1]])
+    Bs = rbind(Bs, b0)
+  }
+  if (!is.na(X[[1]][1,1])){
+    for (i in 1:length(X)){
+      dimx = dim(X[[i]])[2]
+      matrix_x = Bstar[h:(h+dimx-1),]
+      if (h==(h+dimx-1)){matrix_x = t(matrix(Bstar[h,]))}
+      if (h!=(h+dimx-1)){matrix_x = Bstar[h:(h+dimx-1),]} # it is non comp, it does not lose a dimension in the transformation
+      h=h+dimx
+      c_k = inverseilr(matrix_x, V[[1]])
+      Bs = rbind(Bs, c_k)
+    }
+  }
+  Bs = Bs[-1,]
+  attr(Bstar,"space")="ilr_coord"
+  attr(Bstar,"contrast") = V
+  
+  attr(tx,"space") = "ilr_coord"
+  attr(tx,"contrast") = NaN
+  
+
+  
+  fittedvalues = tx%*%Bstar
+  resid = ty- fittedvalues
+  attr(resid,"space") = NULL
+  attr(resid,"contrast") = NULL
+  colnames(Bs) = y_col_names
+  rownames(Bs) = x_col_names
+  attr(Bs,"space")="simplex"
+  
+  list_return = list(Y_coord = ty, X_coord = tx, constant = constant, B_coord = Bstar, B_simplex = Bs, Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
+  attr(list_return, "reg_type") = "ilr_y_reg"
+  
+  return(list_return)
+}
+```
+
+
+## alr_y_reg
+
+```{r}
+alr_y_reg = function(Y,X,R=list(NULL),constant=TRUE){ 
+  if (constant){x_col_names = c("intercept")}
+  else{x_col_names = c()}
+  
+  for (i in 1:length(X)){
+    if (is.null(colnames(X[[i]]))){
+      for (j in 1:(dim(X[[i]])[2])){
+        x_col_names = c(x_col_names, paste("X_",i,"_",j,sep=""))
+      }
+    }
+    else{x_col_names = c(x_col_names,colnames(X[[i]]))}
+  }
+  
+  if (is.null(colnames(Y))){
+    y_col_names = c()
+    for (i in 1:(dim(Y)[2])){
+      y_col_names = c(y_col_names, paste("Y_",i,sep=""))
+    }
+  }
+  else{y_col_names = colnames(Y)}
+  
+  tx = matrix(numeric(dim(X[[1]])[1]))+1 # X = tx as it is already in coord.
+  for (i in 1:length(X)){
+    tx = cbind(tx,X[[i]])
+    }
+  if (constant==FALSE){ 
+    tx=tx[,-1]
+  }
+  
+  # transform Y to coordinates
+  if (!is.null(R[[1]])){ # if R specified as argument
+    ty = alr(Y,R[[1]])
+  }
+  
+  else{
+    R=list(dim(Y)[2]) # if R not specified as argument
+    ty=alr(Y,R[[1]])}
+  
+  if (sum(is.na(ty))>0){stop("There are NAs in the Y variable.")}
+  if (sum(is.na(tx))>0){stop("There are NAs in the X variable.")}
+  
+  Bstar = mlm(ty,tx)
+  bcov = b_cov(tx,ty,Bstar) 
+  Bs = t(matrix(numeric(dim(Y)[2])))
+  h=1
+  
+  if (constant==TRUE){
+    h=2
+    b0=inversealr(t(Bstar[1,]),R[[1]])
+    Bs = rbind(Bs, b0)
+  }
+  if (!is.na(X[[1]][1,1])){
+    for (i in 1:length(X)){
+      dimx = dim(X[[i]])[2]
+      if (h==(h+dimx-1)){matrix_x = t(matrix(Bstar[h,]))}
+      if (h!=(h+dimx-1)){matrix_x = Bstar[h:(h+dimx-1),]} # it is non comp, it does not lose a dimension in the transformation
+      h=h+dimx
+      c_k = inversealr(matrix_x, R[[1]])
+      Bs = rbind(Bs, c_k)
+    }
+  }
+  Bs = Bs[-1,]
+  attr(Bstar,"space")="alr_coord"
+  attr(Bstar,"reference") = R
+  
+  attr(tx,"space") = "alr_coord"
+  attr(tx,"reference") = NaN
+  
+  
+  fittedvalues = tx%*%Bstar
+  resid = ty- fittedvalues
+  attr(resid,"space") = NULL
+  attr(resid,"contrast") = NULL
+  
+  colnames(Bs) = y_col_names
+  rownames(Bs) = x_col_names
+  attr(Bs,"space")="simplex"
+  
+  list_return = list(Y_coord = ty, X_coord = tx, constant=constant, B_coord = Bstar, B_simplex = Bs, Bcoord_cov=bcov, residuals_coord = resid, fitted_v_coord = fittedvalues)
+  attr(list_return, "reg_type") = "alr_y_reg"
+  
+  
+  return(list_return)
+}
+```
+
+
+
+
+## ILR y impacts
+
+```{r}
+ilr_y_impacts = function(results){ 
+  ccnames = colnames(results$B_simplex)
+  rcnames = rownames(results$B_simplex)
+  constant = results$constant
+  Bcoord = results$B_coord
+  Vy = attr(results$Y_coord, "contrast")
+  xcoord = results$X_coord
+  EYcoord = xcoord%*%Bcoord
+  EYsimpl = inverseilr(EYcoord,Vy)
+  D = dim(Vy)[1]
+  impacts=list()
+  for (i in 1:(dim(EYsimpl)[1])){
+    Wi = diag(D) - matrix(1,D,1)%*%t(EYsimpl[i,])
+    imp = t(Wi%*%Vy%*%t(Bcoord))
+    colnames(imp) = ccnames
+    rownames(imp) = rcnames
+    if (constant){
+        if (dim(imp)[1]==2){ 
+          imp = t(as.matrix(imp)[-1,])
+          rownames(imp) = c(rcnames[[2]])
+        }
+        else{
+          imp = imp[-1,]
+        }
+      }
+    impacts[[i]] = imp
+  }
+  return(impacts)
+}
+```
+
+
+## ALR y impacts 
+
+```{r}
+alr_y_impacts = function(results){ 
+  constant = results$constant
+  Bcoord = results$B_coord
+  coln = colnames(results$B_simplex)
+  rown = rownames(results$B_simplex)
+  R = attr(results$Y_coord, "reference")
+  xcoord = results$X_coord
+  EYcoord = xcoord%*%Bcoord
+  Re=dim(EYcoord)[2]+1
+  EYsimpl = inversealr(EYcoord,Re)
+  D = dim(EYcoord)[2]+1
+  impacts=list()
+  for (i in 1:(dim(EYsimpl)[1])){
+    Wi = diag(D) - matrix(1,D,1)%*%t(EYsimpl[i,]) 
+    Wistar = Wi%*%P_D(D) 
+    tempres = t(Wistar%*%t(Bcoord))
+    tempres = inv_permutation_D(tempres,R)
+    colnames(tempres) = coln
+    rownames(tempres) = rown
+    if (constant){
+      if (dim(tempres)[1]==2){ 
+          tempres = t(as.matrix(tempres)[-1,])
+          rownames(tempres) = c(rown[[2]])
+        }
+        else{
+          tempres = tempres[-1,]
+        }
+      }
+    
+    impacts[[i]] = tempres
+  }
+  return(impacts)
+}
+```
+
+
+## general impacts function
+
+```{r}
+impacts = function(results, p_values=FALSE){
+  if (attr(results,"reg_type")=="alr_x_reg"){return(alr_x_impacts(results))}
+  if (attr(results,"reg_type")=="alr_y_reg"){return(alr_y_impacts(results))}
+  if (attr(results,"reg_type")=="alr_yx_reg"){return(alr_yx_impacts(results))}
+  if (attr(results,"reg_type")=="ilr_x_reg"){
+    imps_original = ilr_x_impacts(results)
+    if (p_values==F){return(imps_original)}
+    imps = imps_original
+    ss = se_x(results)
+    signs = imps
+    for (j in 1:dim(imps)[2]){
+      for (i in 1:dim(imps)[1]){
+        val = imps[i,j]
+        tt = val/ss[i,j]
+        pval = 1+pnorm(-abs(tt))-pnorm(abs(tt))
+        if ((pval>0.05)&(pval<0.10)){
+          signs[i,j]  = "*  "
+        }
+        if ((pval<0.05)&(pval>0.01)){
+          signs[i,j]  = "** "
+        }
+        if (pval<0.01){
+          signs[i,j]  = "***"
+        }
+        else{
+          signs[i,j]  = "   "
+        }
+      }
+    }
+    for (i in (dim(signs)[2]):1){
+      orignames = colnames(imps)
+      nnames_i = "   "
+      if (i==dim(imps)[2]){
+        newnames  = c(orignames[1:i],nnames_i)
+        newmat    = cbind(imps[,1:i],signs[,i])
+      }
+      else{
+        newnames  = c(orignames[1:i],nnames_i,orignames[(i+1):length(orignames)])
+        newmat    = cbind(imps[,1:i],signs[,i],imps[,(i+1):(dim(imps)[2])])
+      }
+      imps = newmat
+      orignames = newnames
+      colnames(imps) = orignames
+    }
+    print(imps, quote=FALSE)
+    return(cat("\n"))
+  }
+  if (attr(results,"reg_type")=="ilr_y_reg"){return(ilr_y_impacts(results))}
+  if (attr(results,"reg_type")=="ilr_yx_reg"){return(ilr_yx_impacts(results))}
+  else{stop("Input in 'impacts()' function is not a valid output of one of the regression functions.")}
+}
+```
+
+## summary for impacts (only for yx and y models. For x models it makes no sense.)
+
+```{r}
+imp_summary = function(impact_results){
+  ynames = colnames(impact_results[[1]])
+  xnames = rownames(impact_results[[1]])
+  ncols = length(ynames)*length(xnames)
+  xaxis = numeric(ncols)
+  cc=1
+  for (i in xnames){
+    for (j in ynames){
+      xaxis[cc] = paste(i,j,sep=" -> ") 
+      cc=cc+1
+    }
+  }
+  resmat = matrix(0,ncols,6)
+  rownames(resmat) = xaxis
+  colnames(resmat) = c("Mean", "Min.", "q1 (25%)", "q2 (50%)", "q3 (75%)", "Max.")
+  qq=1
+  for (i in 1:length(xnames)){
+    for (j in 1:length(ynames)){
+      values = numeric(length(impact_results))
+      for (n in 1:length(impact_results)){
+        values[n] = impact_results[[n]][i,j]
+      }
+      resmat[qq,1] = mean(values)
+      resmat[qq,2] = min(values)
+      resmat[qq,3] = quantile(values,0.25)
+      resmat[qq,4] = quantile(values,0.5)
+      resmat[qq,5] = quantile(values,0.75)
+      resmat[qq,6] = max(values)
+      qq=qq+1
+    }
+  }
+  return(resmat)
+}
+```
+
+```{r}
+share_ratio_summary = function(results){
+  Bs = results$B_simplex
+  xnames = rownames(Bs)
+  constant = results$constant
+  hh=0
+  if (constant){
+    hh=1
+    if (dim(Bs)[1]==2){
+      Bs = t(as.matrix(Bs[-1,]))
+      rownames(Bs) = c(xnames[[2]])}
+    else{Bs = as.matrix(Bs[-1,])}
+  }
+  res=list()
+  P = (dim(Bs)[1])
+  for (k in 1:P){
+    dimy = dim(Bs)[2]
+    matres = matrix(0,dimy,dimy)
+    for (i in 1:dimy){
+      for (j in 1:dimy){
+        matres[i,j] = log(Bs[k,j]/Bs[k,i])
+      }
+    }
+    colnames(matres) = colnames(Bs)
+    rownames(matres) = colnames(Bs)
+    res[[xnames[[k+hh]]]] = matres
+  }
+  return(res)
+}
+```
+
+## p_values 
+
+```{r}
+p_values_coef = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=list(NULL), B=1000, seed=31000){
+  results = list()
+  set.seed(seed)
+  for (b in 1:B){
+    ids <- sample(x=nrow(dataset), size=dim(dataset)[1], replace=T)
+    sample_b <- dataset[ids,]
+    rownames(sample_b) = NULL
+    coefs_b = inner_reg(dataset = sample_b, formula = formula, transformation = transformation, V=V, R=R)$B_simplex
+    results[[b]] = coefs_b
+  }
+  pvals = results[[1]]
+  attr(pvals,"space")=NULL
+  P = dim(pvals)[2]
+  for (i in 1:(dim(pvals)[1])){
+    for (j in 1:(dim(pvals)[2])){
+      dist = c()
+      for (b in 1:B){
+        dist = c(dist, results[[b]][i,j])
+      }
+      lowers = sum(dist<(1/P))/B
+      pvals[i,j] = 2*min(lowers,1-lowers)
+    }
+  }
+  return(pvals)
+}
+```
+
+
+Version of 'reg' including significance stars: (this should be included in the pres part of each reg, not as a separated function). This is only an example of how it should be done.
+
+```{r}
+reg = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=list(NULL), pres=FALSE, simplex_pvalues=FALSE, B=1000, seed=31000){
+  reg_res = inner_reg(dataset = dataset, formula = formula, transformation = transformation, V=V, R=R)
+  if (!pres){return(reg_res)}
+  input = check_formula(dataset, formula)
+  model_type = input$model_type
+  Bs = reg_res$B_simplex
+  Bstar = reg_res$B_coord
+  bcov = reg_res$Bcoord_cov
+  tx = reg_res$X_coord
+  ty = reg_res$Y_coord
+  resid = reg_res$residuals_coord
+  Y = input$Y
+  X = input$X
+  Z = input$Z
+  constant=input$constant
+  
+  dfsimplex = data.frame(Bs)
+  name=c()
+  for (i in 1:(dim(Y)[2])){
+    name = c(name, paste("Y_", i, sep=""))
+  }
+  colnames(dfsimplex)=name
+  
+  rname = c()
+  if (constant){rname = c(rname, "intercept")}
+  for (i in 1:length(X)){
+    for (j in 1:(dim(X[[i]])[2])){
+      rname = c(rname, paste("X",i,j,sep="_"))
+    }
+  }
+  
+  if (!is.na(Z[[1]][1,1])){
+    for (i in 1:length(Z)){
+      for (j in 1:(dim(Z[[i]])[2])){
+         rname = c(rname, paste("Z",i,j,sep="_"))
+      }
+    }
+  }
+  
+  rownames(dfsimplex)=rname
+  
+  if (model_type=="y_reg"){pp=1}
+  if (model_type=="yx_reg"){pp=1}
+  if (model_type=="x_reg"){pp=0}
+  
+  cnames = c()
+  for (i in (1:(dim(Y)[2]-pp))){
+    if (transformation=="ILR"){
+      cnames = c(cnames, paste("Yilr_",i,sep=""))
+      cnames = c(cnames, paste("(sd_Yilr_",i,")",sep=""))}
+    if (transformation=="ALR"){
+      cnames = c(cnames, paste("Yalr_",i,sep=""))
+      cnames = c(cnames, paste("(sd_Yalr_",i,")",sep=""))}
+  }
+  
+  if (model_type=="y_reg"){qq=0}
+  if (model_type=="yx_reg"){qq=1}
+  if (model_type=="x_reg"){qq=1}
+  
+  rname = c()
+  if (constant){rname = c(rname, "intercept")}
+  for (i in 1:length(X)){
+    for (j in 1:(dim(X[[i]])[2]-qq)){
+      if (transformation=="ILR"){
+        rname = c(rname, paste("Xilr",i,j,sep="_"))}
+      if (transformation=="ALR"){
+        rname = c(rname, paste("Xalr",i,j,sep="_"))}
+        }
+      }
+  
+  if (!is.na(Z[[1]][1,1])){
+    ccc=1
+    for (i in 1:length(Z)){
+      for (j in 1:(dim(Z[[i]])[2])){
+        if (transformation=="ALR"){
+          rname = c(rname, paste("Z",ccc,sep="_"))
+        }
+        if (transformation=="ILR"){
+          rname = c(rname, paste("Z",ccc,sep="_"))
+        }
+        ccc=ccc+1
+      }
+    }
+  }
+
+  
+  # B star and sds
+  dfilr = data.frame(Bstar)
+  
+  # sds
+  dimilr = dim(Y)[2]-pp
+  nc = dim(dfilr)[1]
+  for (i in dimilr:1){
+    if (i==dimilr){dfilr = cbind(dfilr,matrix(nrow=nc))}
+    else{
+      dfilr = cbind(dfilr[,1:i],matrix(nrow=nc),dfilr[,(i+1):(dim(dfilr)[2])])
+    }
+  }
+  
+  dfilr = t(dfilr)
+  
+  for (i in 1:(dim(bcov)[1])){
+    dfilr[2*i] = sqrt(bcov[i,i]) # standard deviation as sqrt of var
+  }
+  dfilr = t(dfilr)
+  
+  rownames(dfilr) = rname
+  colnames(dfilr) = cnames
+  
+  ilr_pvals = matrix(0,dim(dfilr)[1],dim(dfilr)[2]/2)
+  cc=0
+  for (j in seq(1,dim(dfilr)[2],2)){
+    cc=cc+1
+    t_j = dfilr[,j]/dfilr[,j+1]
+    for (i in 1:(dim(dfilr)[1])){
+      pval = pnorm(-abs(t_j[[i]]),mean=0,sd=1)+(1-pnorm(abs(t_j[[i]]),mean=0,sd=1))
+      if (is.na(pval)){ilr_pvals[i,cc]  = " - "}
+      else{
+        if ((pval>0.05)&(pval<0.10)){
+          ilr_pvals[i,cc]  = "*  "
+        }
+        if ((pval<0.05)&(pval>0.01)){
+          ilr_pvals[i,cc]  = "** "
+        }
+        if (pval<0.01){
+          ilr_pvals[i,cc]  = "***"
+        }
+        else{
+          ilr_pvals[i,cc]  = "   "
+        }
+      }
+    }
+  }
+  
+  for (i in dim(ilr_pvals)[2]:1){
+    orignames = colnames(dfilr)
+    nnames_i = "   "
+    if (i==dim(ilr_pvals)[2]){
+      newnames  = c(orignames[1:(2*i)],nnames_i)
+      newmat    = cbind(dfilr[,1:(2*i)],ilr_pvals[,i])
+    }
+    else{
+      newnames  = c(orignames[1:(2*i)],nnames_i,orignames[(2*i+1):length(orignames)])
+      newmat    = cbind(dfilr[,1:(2*i)],ilr_pvals[,i],dfilr[,(2*i+1):(dim(dfilr)[2])])
+    }
+    dfilr = newmat
+    orignames = newnames
+    colnames(dfilr) = orignames
+  }
+    if (simplex_pvalues=="bootstrap"){
+      sigmat = dfsimplex
+      if (model_type=="y_reg"){pvals = p_values_coef_y(dataset = dataset,formula = formula,transformation = transformation,V=V,R=R,B=B,seed=seed)}
+      if (model_type=="yx_reg"){pvals = p_values_coef_y(dataset = dataset,formula = formula,transformation = transformation,V=V,R=R,B=B,seed=seed)}
+      if (model_type=="x_reg"){pvals = p_values_coef_x(dataset = dataset,formula = formula,transformation = transformation,V=V,R=R,B=B,seed=seed)}
+      for (i in 1:(dim(dfsimplex)[1])){
+        for (j in 1:(dim(dfsimplex)[2])){
+          val = dfsimplex[i,j]
+          pval = pvals[i,j]
+          if (is.na(pval)){sigmat[i,cc]  = " - "}
+          else{
+            if ((pval>0.05)&(pval<0.10)){
+              sigmat[i,j] = "*  "
+            }
+            if ((pval<=0.05)&(pval>0.01)){
+              sigmat[i,j] = "** "
+            }
+            if (pval<=0.01){
+              sigmat[i,j] = "***"
+            }
+            else{
+              sigmat[i,j] = "   "
+            }
+          }
+        }
+      }
+    }
+    
+  colnames(dfsimplex) = colnames(Bs)
+  rownames(dfsimplex) = rownames(Bs)
+  
+  if (simplex_pvalues=="bootstrap"){
+    for (i in dim(sigmat)[2]:1){
+      orignames = colnames(dfsimplex)
+      nnames_i = "   "
+      if (i==dim(sigmat)[2]){
+        newnames  = c(orignames[1:i],nnames_i)
+        newmat    = cbind(dfsimplex[,1:i],sigmat[,i])
+      }
+      else{
+        newnames  = c(orignames[1:i],nnames_i,orignames[(i+1):length(orignames)])
+        newmat    = cbind(dfsimplex[,1:i],sigmat[,i],dfsimplex[,(i+1):(dim(dfsimplex)[2])])
+      }
+      dfsimplex = newmat
+      orignames = newnames
+      colnames(dfsimplex) = orignames
+    }
+  }
+  if (transformation=="ILR"){
+    arg4 = "     B* (COEF. and SD IN THE ILR SPACE):    "
+  }
+  if (transformation=="ALR"){
+    arg4 = "     B* (COEF. and SD IN THE ALR SPACE):    "
+  }
+  arg1 = "      B (COEFFICIENTS IN THE SIMPLEX):      "
+  arg2 = as.matrix(dfsimplex)
+  arg3 = "--------------------------------------------"
+  arg5 = as.matrix(dfilr)
+  arg6 = "--------------------------------------------"
+  arg7 = paste("n obs  : ", dim(tx)[1], sep="")
+  arg8 = paste("SSR    : ", sum(resid^2), sep="") # sum of squared residuals
+  cat(arg1,"\n")
+  print(arg2,quote=FALSE)
+  cat(arg3,"\n", arg4,"\n")
+  print(tidy(arg5),quote=FALSE)
+  cat(arg6,"\n", arg7,"\n", arg8,"\n")
+}
+```
+
+
+```{r}
+prueba = function(pval){
+      if ((pval>0.05)&(pval<0.10)){
+        print("si")
+      }
+      else{ print("No")}
+}
+```
+
+
+## pvalues semielasticities
+
+ideas:
+
+- small variation -> enough impact to change sign? (what is 'small'?) 
+- adding noise to dataset and quantifying how much noise is needed to change the sign of the impact. (lots of problems)
+
+- [Winner]: create several datasets bootstrapping but their first observation is the observation of interest (that whose p-value is desired to compute) and replicate the previous approach (for simplex coeff's pvalues)
+
+
+```{r}
+p_values_se = function(dataset, formula, observation, transformation = "ILR", V=list(matrix()), R=list(NULL), B=1000, seed=31000){
+  results = list()
+  set.seed(seed)
+  for (b in 1:B){
+    ids <- sample(x=nrow(dataset), size=dim(dataset)[1]-1, replace=T)
+    ids = c(observation,ids)
+    sample_b <- dataset[ids,]
+    rownames(sample_b) = NULL
+    impacts_i = impacts(inner_reg(dataset = sample_b, formula = formula, transformation = transformation, V=V, R=R))[[1]]
+    results[[b]] = impacts_i
+  }
+  rimpacts = results[[1]]
+  for (i in 1:(dim(rimpacts)[1])){
+    for (j in 1:(dim(rimpacts)[2])){
+      dist = c()
+      for (b in 1:B){
+        dist = c(dist, results[[b]][i,j])
+      }
+      lowers = sum(dist<0)/B
+      rimpacts[i,j] = 2*min(lowers,1-lowers)
+    }
+  }
+  return(rimpacts)
+}
+```
+
+## P values for x impacts (chage names or pool)
+
+
+```{r}
+p_values_coef_y = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=list(NULL), B=1000, seed=31000){
+  results = list()
+  model_type = check_formula(dataset,formula)$model_type
+  set.seed(seed)
+  for (b in 1:B){
+    ids <- sample(x=nrow(dataset), size=dim(dataset)[1], replace=T)
+    sample_b <- dataset[ids,]
+    rownames(sample_b) = NULL
+    coefs_b = inner_reg(dataset = sample_b, formula = formula, transformation = transformation, V=V, R=R)$B_simplex
+    results[[b]] = coefs_b
+  }
+  pvals = results[[1]]
+  attr(pvals,"space")=NULL
+  P = dim(pvals)[2]
+  dp = 0
+  if (model_type=="y_reg"){dp = 1/P}
+  for (i in 1:(dim(pvals)[1])){
+    for (j in 1:(dim(pvals)[2])){
+      dist = c()
+      for (b in 1:B){
+        dist = c(dist, results[[b]][i,j])
+      }
+      lowers = sum(dist<(dp))/B
+      pvals[i,j] = 2*min(lowers,1-lowers)
+    }
+  }
+  return(pvals)
+}
+```
+
+
+```{r}
+p_values_coef_x = function(dataset, formula, transformation = "ILR", V=list(matrix()), R=list(NULL), B=1000, seed=31000){
+  input = check_formula(dataset,formula)
+  Y=input$Y
+  X=input$X
+  Z=input$Z
+  constant = input$constant
+  results = list()
+  set.seed(seed)
+  for (b in 1:B){
+    ids <- sample(x=nrow(dataset), size=dim(dataset)[1], replace=T)
+    sample_b <- dataset[ids,]
+    rownames(sample_b) = NULL
+    coefs_b = inner_reg(dataset = sample_b, formula = formula, transformation = transformation, V=V, R=R)$B_simplex
+    results[[b]] = coefs_b
+  }
+  pvals = results[[1]]
+  
+  compare = matrix(0, dim(results[[1]])[1], dim(results[[1]])[2])
+  h=1
+  if (constant){
+    compare[1,] = numeric(dim(compare)[2])
+    h=2
+  }
+  for (elem in X){
+    dimxx = dim(elem)[2]
+    compare[h:(h+dimxx-1),] = matrix(1/dimxx, dim(Y)[2], dimxx)
+  }
+  
+  attr(pvals,"space")=NULL
+  for (i in 1:(dim(pvals)[1])){
+    for (j in 1:(dim(pvals)[2])){
+      dist = c()
+      for (b in 1:B){
+        dist = c(dist, results[[b]][i,j])
+      }
+      toc = compare[i,j]
+      lowers = sum(dist[!is.na(dist)]<toc)/sum(!is.na(dist))
+      pvals[i,j] = 2*min(lowers,1-lowers)
+    }
+  }
+  return(pvals)
+}
+```
+
+## exact semi-elasticities for x compo models
+
+```{r}
+se_x = function(reg_results){ 
+  constant = reg_results$constant
+  xdim = reg_results$xdim
+  imp_results = ilr_x_impacts(reg_results)
+  y_parts = dim(imp_results)[2]
+  nrows = dim(imp_results)[1]
+  dimres = dim(reg_results$Bcoord_cov)[1]
+  matsds = reg_results$Bcoord_cov
+  x_parts = 0
+  for (k in 1:length(xdim)){
+    x_parts = x_parts + xdim[[k]][1] - 1
+  }
+  
+  matl = dimres / y_parts
+  matlist = list()
+  t=1
+  
+  for (k in 1:y_parts){
+    matlist[[k]] = as.matrix(matsds[t:(t+matl-1),t:(t+matl-1)])
+    if (constant){matlist[[k]]=matlist[[k]][-1,-1]}
+    matlist[[k]] = matlist[[k]][1:x_parts,1:x_parts]
+    t=t+matl
+  }
+  
+  sds = c()
+  reds = list()
+  for (k in 1:y_parts){
+    h=1
+    for (j in 1:length(xdim)){
+      fin = h+xdim[[j]]-2
+      redmat = as.matrix(matlist[[k]][h:fin,h:fin])
+      var_j = V_D(xdim[[j]])%*%redmat%*%t(V_D(xdim[[j]]))
+      sds = c(sds,sqrt(diag(var_j)))
+      h=h+xdim[[j]]-1
+    }
+  }
+  result_mat = t(matrix(sds, y_parts,nrows, byrow=T))
+  return(result_mat)
+}
+```
+
+## Function to present results in a more elegant way
+
+```{r}
+tidy = function(matrix, dig=14){
+  for (j in 1:dim(matrix)[2]){
+    if ((substr(matrix[1,j],1,1)!=" ")&(substr(matrix[1,j],1,1)!="*")){
+      for (i in 1:dim(matrix)[1]){
+        if (substr(matrix[i,j],1,1) != "-"){
+          matrix[i,j] = paste(" ",matrix[i,j], sep="")
+        }
+        matrix[i,j] = substr(matrix[i,j],1,dig)
+      }
+    }
+  }
+  return(matrix)
+}
+```
+
+## Package skeleton
+
+```{r}
+package.skeleton("")
+```
+
+
